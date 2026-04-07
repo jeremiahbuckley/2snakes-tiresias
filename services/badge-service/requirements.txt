@@ -1,0 +1,5 @@
+fastapi>=0.111.0
+pydantic>=2.7.0
+pytest>=8.2.0
+pytest-asyncio>=0.23.6
+# scoring-engine is a local dep; install with: pip install -e ../scoring-engine
