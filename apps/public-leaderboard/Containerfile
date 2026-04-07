@@ -1,26 +1,47 @@
 # apps/public-leaderboard/Containerfile
 #
-# Placeholder — frontend stack is TBD.
-# Public-facing; consider SSR (Next.js) or static export for SEO.
+# SvelteKit app built with @sveltejs/adapter-node.
+# Public — no auth required. Shows ranked forecasters by Brier Skill Score
+# with filters for platform and domain.
 #
-# Usage (once implemented):
+# Usage:
 #   podman build -t tiresias-public-leaderboard .
 #   podman run --rm -p 3001:3001 \
-#     -e VITE_API_BASE_URL=https://api.tiresias.app \
+#     -e PUBLIC_API_BASE_URL=https://api.tiresias.app \
 #     tiresias-public-leaderboard
 
 FROM node:20-slim AS builder
 
 WORKDIR /app
 
-RUN echo '<!DOCTYPE html><html><body><h1>public-leaderboard (placeholder)</h1></body></html>' > /app/index.html
+COPY package*.json .
+RUN npm ci
 
+COPY svelte.config.js vite.config.js ./
+COPY src/ ./src/
+COPY static/ ./static/
+
+RUN npm run build
+
+# --- runtime ---
 FROM node:20-slim AS runtime
 
 WORKDIR /app
-COPY --from=builder /app/index.html .
+
+COPY --from=builder /app/build ./build
+COPY --from=builder /app/package*.json .
+RUN npm ci --omit=dev
+
+RUN adduser --disabled-password --gecos "" appuser
+USER appuser
 
 ENV PORT=3001
+ENV HOST=0.0.0.0
+ENV PUBLIC_API_BASE_URL=http://localhost:8000
+
 EXPOSE 3001
 
-CMD ["node", "-e", "require('http').createServer((_,r)=>{r.end(require('fs').readFileSync('index.html'))}).listen(process.env.PORT||3001)"]
+HEALTHCHECK --interval=15s --timeout=5s --start-period=15s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3001', r => process.exit(r.statusCode === 200 ? 0 : 1))"
+
+CMD ["node", "build"]

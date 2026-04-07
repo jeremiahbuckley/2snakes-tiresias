@@ -1,27 +1,47 @@
 # apps/public-profile/Containerfile
 #
-# Placeholder — frontend stack is TBD.
-# Public-facing; needs OG image generation for social sharing previews.
-# Consider Next.js + @vercel/og or satori for dynamic OG cards.
+# SvelteKit app built with @sveltejs/adapter-node.
+# Public — shareable per-user profile page with badges, summary stats,
+# and OG image generation for social link previews.
 #
-# Usage (once implemented):
+# Usage:
 #   podman build -t tiresias-public-profile .
 #   podman run --rm -p 3002:3002 \
-#     -e VITE_API_BASE_URL=https://api.tiresias.app \
+#     -e PUBLIC_API_BASE_URL=https://api.tiresias.app \
 #     tiresias-public-profile
 
 FROM node:20-slim AS builder
 
 WORKDIR /app
 
-RUN echo '<!DOCTYPE html><html><body><h1>public-profile (placeholder)</h1></body></html>' > /app/index.html
+COPY package*.json .
+RUN npm ci
 
+COPY svelte.config.js vite.config.js ./
+COPY src/ ./src/
+COPY static/ ./static/
+
+RUN npm run build
+
+# --- runtime ---
 FROM node:20-slim AS runtime
 
 WORKDIR /app
-COPY --from=builder /app/index.html .
+
+COPY --from=builder /app/build ./build
+COPY --from=builder /app/package*.json .
+RUN npm ci --omit=dev
+
+RUN adduser --disabled-password --gecos "" appuser
+USER appuser
 
 ENV PORT=3002
+ENV HOST=0.0.0.0
+ENV PUBLIC_API_BASE_URL=http://localhost:8000
+
 EXPOSE 3002
 
-CMD ["node", "-e", "require('http').createServer((_,r)=>{r.end(require('fs').readFileSync('index.html'))}).listen(process.env.PORT||3002)"]
+HEALTHCHECK --interval=15s --timeout=5s --start-period=15s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3002', r => process.exit(r.statusCode === 200 ? 0 : 1))"
+
+CMD ["node", "build"]

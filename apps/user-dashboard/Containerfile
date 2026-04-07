@@ -1,38 +1,47 @@
 # apps/user-dashboard/Containerfile
 #
-# Placeholder — frontend stack is TBD (likely React + Vite or Next.js).
-# Replace this file once the framework is chosen.
+# SvelteKit app built with @sveltejs/adapter-node.
+# Private — requires authentication. Shows prediction history,
+# calibration stats, badge collection, and account linking.
 #
-# Assumed pattern for a Node.js/React app:
-#   1. Build stage: npm ci && npm run build
-#   2. Runtime stage: serve static output via nginx or node server
-#
-# Usage (once implemented):
+# Usage:
 #   podman build -t tiresias-user-dashboard .
 #   podman run --rm -p 3000:3000 \
-#     -e VITE_API_BASE_URL=https://api.tiresias.app \
+#     -e PUBLIC_API_BASE_URL=https://api.tiresias.app \
 #     tiresias-user-dashboard
 
 FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# TODO: uncomment once package.json exists
-# COPY package*.json .
-# RUN npm ci
-# COPY . .
-# RUN npm run build
+COPY package*.json .
+RUN npm ci
 
-# Temporary placeholder — serves a stub HTML response
-RUN echo '<!DOCTYPE html><html><body><h1>user-dashboard (placeholder)</h1></body></html>' > /app/index.html
+COPY svelte.config.js vite.config.js ./
+COPY src/ ./src/
+COPY static/ ./static/
 
+RUN npm run build
+
+# --- runtime ---
 FROM node:20-slim AS runtime
 
 WORKDIR /app
-COPY --from=builder /app/index.html .
+
+COPY --from=builder /app/build ./build
+COPY --from=builder /app/package*.json .
+RUN npm ci --omit=dev
+
+RUN adduser --disabled-password --gecos "" appuser
+USER appuser
 
 ENV PORT=3000
+ENV HOST=0.0.0.0
+ENV PUBLIC_API_BASE_URL=http://localhost:8000
+
 EXPOSE 3000
 
-# TODO: replace with proper static server (nginx, serve, etc.)
-CMD ["node", "-e", "require('http').createServer((_,r)=>{r.end(require('fs').readFileSync('index.html'))}).listen(process.env.PORT||3000)"]
+HEALTHCHECK --interval=15s --timeout=5s --start-period=15s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:3000', r => process.exit(r.statusCode === 200 ? 0 : 1))"
+
+CMD ["node", "build"]
