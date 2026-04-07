@@ -1,0 +1,30 @@
+# services/connector-kalshi/Containerfile
+#
+# NOTE: In the current architecture, connector-kalshi is a Python package
+# imported directly by the scheduler rather than a standalone service.
+# This Containerfile is used for:
+#   - Running unit tests in CI
+#   - Future extraction into a standalone sync microservice
+#
+# Usage:
+#   podman build -t tiresias-connector-kalshi .
+#   podman run --rm tiresias-connector-kalshi          # runs tests
+#   podman run --rm tiresias-connector-kalshi pytest -v # verbose
+
+FROM python:3.12-slim AS base
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY connector_kalshi/ ./connector_kalshi/
+COPY tests/ ./tests/
+
+RUN adduser --disabled-password --gecos "" appuser
+USER appuser
+
+ENV KALSHI_API_KEY=""
+ENV KALSHI_API_BASE="https://trading-api.kalshi.com/trade-api/v2"
+
+CMD ["pytest", "tests/", "-v"]

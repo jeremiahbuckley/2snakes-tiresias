@@ -1,0 +1,37 @@
+# services/api-gateway/Containerfile
+#
+# Runs the unified FastAPI application via uvicorn.
+# This is the only service that should be exposed to the public internet;
+# all frontend apps talk exclusively to this gateway.
+#
+# Usage:
+#   podman build -t tiresias-api-gateway .
+#   podman run --rm -p 8000:8000 \
+#     -e DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/tiresias \
+#     -e JWT_SECRET_KEY=your-secret-key \
+#     tiresias-api-gateway
+
+FROM python:3.12-slim AS base
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY api_gateway/ ./api_gateway/
+COPY tests/ ./tests/
+
+RUN adduser --disabled-password --gecos "" appuser
+USER appuser
+
+ENV PORT=8000
+ENV DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/tiresias
+ENV JWT_SECRET_KEY=change-me-in-production
+ENV WORKERS=2
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+
+CMD ["uvicorn", "api_gateway.app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

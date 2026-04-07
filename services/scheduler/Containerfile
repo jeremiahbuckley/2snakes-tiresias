@@ -1,0 +1,57 @@
+# services/scheduler/Containerfile
+#
+# Runs the APScheduler background job process.
+# This container bundles the scheduler AND all connector packages, since
+# the scheduler imports them directly as Python libraries.
+#
+# Jobs:
+#   - sync markets from all connectors       every 15 min
+#   - score newly resolved predictions       every 5 min
+#   - rebuild leaderboard snapshot           every hour
+#
+# Usage:
+#   podman build -t tiresias-scheduler .
+#   podman run --rm \
+#     -e DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/tiresias \
+#     -e KALSHI_API_KEY=... \
+#     -e POLYMARKET_API_KEY=... \
+#     -e MANIFOLD_API_KEY=... \
+#     -e METACULUS_TOKEN=... \
+#     tiresias-scheduler
+
+FROM python:3.12-slim AS base
+
+WORKDIR /app
+
+# Install scheduler deps
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install connector deps (bundled with scheduler at runtime)
+COPY ../connector-kalshi/requirements.txt     ./requirements-kalshi.txt
+COPY ../connector-polymarket/requirements.txt ./requirements-polymarket.txt
+COPY ../connector-manifold/requirements.txt   ./requirements-manifold.txt
+COPY ../connector-metaculus/requirements.txt  ./requirements-metaculus.txt
+RUN pip install --no-cache-dir \
+    -r requirements-kalshi.txt \
+    -r requirements-polymarket.txt \
+    -r requirements-manifold.txt \
+    -r requirements-metaculus.txt
+
+# Copy all source packages
+COPY scheduler/ ./scheduler/
+COPY ../connector-kalshi/connector_kalshi/         ./connector_kalshi/
+COPY ../connector-polymarket/connector_polymarket/ ./connector_polymarket/
+COPY ../connector-manifold/connector_manifold/     ./connector_manifold/
+COPY ../connector-metaculus/connector_metaculus/   ./connector_metaculus/
+
+RUN adduser --disabled-password --gecos "" appuser
+USER appuser
+
+ENV DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/tiresias
+ENV KALSHI_API_KEY=""
+ENV POLYMARKET_API_KEY=""
+ENV MANIFOLD_API_KEY=""
+ENV METACULUS_TOKEN=""
+
+CMD ["python", "-m", "scheduler.runner"]

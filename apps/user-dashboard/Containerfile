@@ -1,0 +1,38 @@
+# apps/user-dashboard/Containerfile
+#
+# Placeholder — frontend stack is TBD (likely React + Vite or Next.js).
+# Replace this file once the framework is chosen.
+#
+# Assumed pattern for a Node.js/React app:
+#   1. Build stage: npm ci && npm run build
+#   2. Runtime stage: serve static output via nginx or node server
+#
+# Usage (once implemented):
+#   podman build -t tiresias-user-dashboard .
+#   podman run --rm -p 3000:3000 \
+#     -e VITE_API_BASE_URL=https://api.tiresias.app \
+#     tiresias-user-dashboard
+
+FROM node:20-slim AS builder
+
+WORKDIR /app
+
+# TODO: uncomment once package.json exists
+# COPY package*.json .
+# RUN npm ci
+# COPY . .
+# RUN npm run build
+
+# Temporary placeholder — serves a stub HTML response
+RUN echo '<!DOCTYPE html><html><body><h1>user-dashboard (placeholder)</h1></body></html>' > /app/index.html
+
+FROM node:20-slim AS runtime
+
+WORKDIR /app
+COPY --from=builder /app/index.html .
+
+ENV PORT=3000
+EXPOSE 3000
+
+# TODO: replace with proper static server (nginx, serve, etc.)
+CMD ["node", "-e", "require('http').createServer((_,r)=>{r.end(require('fs').readFileSync('index.html'))}).listen(process.env.PORT||3000)"]

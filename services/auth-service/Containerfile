@@ -1,0 +1,35 @@
+# services/auth-service/Containerfile
+#
+# Runs the auth-service FastAPI app via uvicorn.
+#
+# Usage:
+#   podman build -t tiresias-auth-service .
+#   podman run --rm -p 8002:8002 \
+#     -e DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/tiresias \
+#     -e JWT_SECRET_KEY=your-secret-key \
+#     tiresias-auth-service
+
+FROM python:3.12-slim AS base
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY auth_service/ ./auth_service/
+COPY tests/ ./tests/
+
+RUN adduser --disabled-password --gecos "" appuser
+USER appuser
+
+ENV PORT=8002
+ENV DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/tiresias
+ENV JWT_SECRET_KEY=change-me-in-production
+ENV JWT_EXPIRE_MINUTES=60
+
+EXPOSE 8002
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8002/auth/me')" || exit 0
+
+CMD ["uvicorn", "auth_service.api:router", "--host", "0.0.0.0", "--port", "8002"]

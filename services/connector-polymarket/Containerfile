@@ -1,0 +1,28 @@
+# services/connector-polymarket/Containerfile
+#
+# NOTE: In the current architecture, connector-polymarket is a Python package
+# imported directly by the scheduler rather than a standalone service.
+# This Containerfile is used for CI testing and future standalone extraction.
+#
+# Usage:
+#   podman build -t tiresias-connector-polymarket .
+#   podman run --rm tiresias-connector-polymarket
+
+FROM python:3.12-slim AS base
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY connector_polymarket/ ./connector_polymarket/
+COPY tests/ ./tests/
+
+RUN adduser --disabled-password --gecos "" appuser
+USER appuser
+
+ENV POLYMARKET_API_KEY=""
+ENV POLYMARKET_CLOB_BASE="https://clob.polymarket.com"
+ENV POLYMARKET_GAMMA_BASE="https://gamma-api.polymarket.com"
+
+CMD ["pytest", "tests/", "-v"]

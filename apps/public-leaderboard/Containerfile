@@ -1,0 +1,26 @@
+# apps/public-leaderboard/Containerfile
+#
+# Placeholder — frontend stack is TBD.
+# Public-facing; consider SSR (Next.js) or static export for SEO.
+#
+# Usage (once implemented):
+#   podman build -t tiresias-public-leaderboard .
+#   podman run --rm -p 3001:3001 \
+#     -e VITE_API_BASE_URL=https://api.tiresias.app \
+#     tiresias-public-leaderboard
+
+FROM node:20-slim AS builder
+
+WORKDIR /app
+
+RUN echo '<!DOCTYPE html><html><body><h1>public-leaderboard (placeholder)</h1></body></html>' > /app/index.html
+
+FROM node:20-slim AS runtime
+
+WORKDIR /app
+COPY --from=builder /app/index.html .
+
+ENV PORT=3001
+EXPOSE 3001
+
+CMD ["node", "-e", "require('http').createServer((_,r)=>{r.end(require('fs').readFileSync('index.html'))}).listen(process.env.PORT||3001)"]

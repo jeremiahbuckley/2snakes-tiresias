@@ -1,0 +1,24 @@
+# services/scoring-engine/Containerfile
+#
+# NOTE: scoring-engine is a pure-Python library with no network interface.
+# It is imported directly by the scheduler and badge-service.
+# This Containerfile is used for CI testing and future extraction.
+#
+# Usage:
+#   podman build -t tiresias-scoring-engine .
+#   podman run --rm tiresias-scoring-engine
+
+FROM python:3.12-slim AS base
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY scoring_engine/ ./scoring_engine/
+COPY tests/ ./tests/
+
+RUN adduser --disabled-password --gecos "" appuser
+USER appuser
+
+CMD ["pytest", "tests/", "-v"]

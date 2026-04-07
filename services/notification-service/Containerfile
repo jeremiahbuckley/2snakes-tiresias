@@ -1,0 +1,32 @@
+# services/notification-service/Containerfile
+#
+# Runs the notification-service as an async worker process.
+# No HTTP interface — listens for events from the badge-service and scheduler.
+#
+# TODO: add a message queue (e.g. Redis pub/sub or RabbitMQ) as the event
+#       transport; for now the worker is invoked directly by the scheduler.
+#
+# Usage:
+#   podman build -t tiresias-notification-service .
+#   podman run --rm \
+#     -e EMAIL_PROVIDER_API_KEY=your-key \
+#     tiresias-notification-service
+
+FROM python:3.12-slim AS base
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY notification_service/ ./notification_service/
+COPY tests/ ./tests/
+
+RUN adduser --disabled-password --gecos "" appuser
+USER appuser
+
+ENV EMAIL_PROVIDER_API_KEY=""
+ENV EMAIL_FROM_ADDRESS="noreply@tiresias.app"
+
+# TODO: replace with actual worker entrypoint once event transport is wired up
+CMD ["python", "-m", "notification_service.worker"]

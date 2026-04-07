@@ -1,0 +1,32 @@
+# services/data-layer/Containerfile
+#
+# Purpose: run Alembic database migrations.
+# This is not a long-running service — it runs to completion and exits.
+#
+# Usage:
+#   podman build -t tiresias-data-layer .
+#   podman run --rm \
+#     -e DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/tiresias \
+#     tiresias-data-layer
+
+FROM python:3.12-slim AS base
+
+WORKDIR /app
+
+# Install deps
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy source
+COPY alembic.ini .
+COPY alembic/ ./alembic/
+COPY data/ ./data/
+
+# Run as non-root
+RUN adduser --disabled-password --gecos "" appuser
+USER appuser
+
+ENV DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/tiresias
+
+# Upgrade to latest revision by default; override CMD for other alembic commands
+CMD ["alembic", "upgrade", "head"]

@@ -1,0 +1,27 @@
+# apps/public-profile/Containerfile
+#
+# Placeholder — frontend stack is TBD.
+# Public-facing; needs OG image generation for social sharing previews.
+# Consider Next.js + @vercel/og or satori for dynamic OG cards.
+#
+# Usage (once implemented):
+#   podman build -t tiresias-public-profile .
+#   podman run --rm -p 3002:3002 \
+#     -e VITE_API_BASE_URL=https://api.tiresias.app \
+#     tiresias-public-profile
+
+FROM node:20-slim AS builder
+
+WORKDIR /app
+
+RUN echo '<!DOCTYPE html><html><body><h1>public-profile (placeholder)</h1></body></html>' > /app/index.html
+
+FROM node:20-slim AS runtime
+
+WORKDIR /app
+COPY --from=builder /app/index.html .
+
+ENV PORT=3002
+EXPOSE 3002
+
+CMD ["node", "-e", "require('http').createServer((_,r)=>{r.end(require('fs').readFileSync('index.html'))}).listen(process.env.PORT||3002)"]

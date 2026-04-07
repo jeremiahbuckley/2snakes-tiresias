@@ -1,0 +1,27 @@
+# services/connector-metaculus/Containerfile
+#
+# NOTE: In the current architecture, connector-metaculus is a Python package
+# imported directly by the scheduler rather than a standalone service.
+# This Containerfile is used for CI testing and future standalone extraction.
+#
+# Usage:
+#   podman build -t tiresias-connector-metaculus .
+#   podman run --rm tiresias-connector-metaculus
+
+FROM python:3.12-slim AS base
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY connector_metaculus/ ./connector_metaculus/
+COPY tests/ ./tests/
+
+RUN adduser --disabled-password --gecos "" appuser
+USER appuser
+
+ENV METACULUS_TOKEN=""
+ENV METACULUS_API_BASE="https://www.metaculus.com/api2"
+
+CMD ["pytest", "tests/", "-v"]
