@@ -24,14 +24,15 @@ FROM python:3.12-slim AS base
 WORKDIR /app
 
 # Install scheduler deps
-COPY requirements.txt .
+COPY scheduler/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Install connector deps (bundled with scheduler at runtime)
-COPY ../connector-kalshi/requirements.txt     ./requirements-kalshi.txt
-COPY ../connector-polymarket/requirements.txt ./requirements-polymarket.txt
-COPY ../connector-manifold/requirements.txt   ./requirements-manifold.txt
-COPY ../connector-metaculus/requirements.txt  ./requirements-metaculus.txt
+# Note: build context must be services/ (not services/scheduler/)
+COPY connector-kalshi/requirements.txt     ./requirements-kalshi.txt
+COPY connector-polymarket/requirements.txt ./requirements-polymarket.txt
+COPY connector-manifold/requirements.txt   ./requirements-manifold.txt
+COPY connector-metaculus/requirements.txt  ./requirements-metaculus.txt
 RUN pip install --no-cache-dir \
     -r requirements-kalshi.txt \
     -r requirements-polymarket.txt \
@@ -39,11 +40,11 @@ RUN pip install --no-cache-dir \
     -r requirements-metaculus.txt
 
 # Copy all source packages
-COPY scheduler/ ./scheduler/
-COPY ../connector-kalshi/connector_kalshi/         ./connector_kalshi/
-COPY ../connector-polymarket/connector_polymarket/ ./connector_polymarket/
-COPY ../connector-manifold/connector_manifold/     ./connector_manifold/
-COPY ../connector-metaculus/connector_metaculus/   ./connector_metaculus/
+COPY scheduler/scheduler/ ./scheduler/
+COPY connector-kalshi/connector_kalshi/         ./connector_kalshi/
+COPY connector-polymarket/connector_polymarket/ ./connector_polymarket/
+COPY connector-manifold/connector_manifold/     ./connector_manifold/
+COPY connector-metaculus/connector_metaculus/   ./connector_metaculus/
 
 RUN adduser --disabled-password --gecos "" appuser
 USER appuser

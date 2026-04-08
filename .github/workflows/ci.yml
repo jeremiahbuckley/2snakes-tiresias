@@ -53,6 +53,7 @@ jobs:
             path: services/notification-service
           - component: scheduler
             path: services/scheduler
+            context: services
           - component: scoring-engine
             path: services/scoring-engine
           - component: public-leaderboard
@@ -66,5 +67,7 @@ jobs:
 
       - name: Build ${{ matrix.component }}
         run: |
-          docker build -f ${{ matrix.path }}/Containerfile ${{ matrix.path }} \
+          docker build \
+            -f ${{ matrix.path }}/Containerfile \
+            ${{ matrix.context || matrix.path }} \
             --tag tiresias/${{ matrix.component }}:${{ github.sha }}
