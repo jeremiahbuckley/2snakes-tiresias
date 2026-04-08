@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies for all services
+        run: |
+          for req in services/*/requirements.txt; do
+            pip install -r "$req"
+          done
+
+      - name: Run unit tests
+        run: python -m pytest services/ -v
+
+  build-containers:
+    name: Build ${{ matrix.component }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: api-gateway
+            path: services/api-gateway
+          - component: auth-service
+            path: services/auth-service
+          - component: badge-service
+            path: services/badge-service
+          - component: connector-kalshi
+            path: services/connector-kalshi
+          - component: connector-manifold
+            path: services/connector-manifold
+          - component: connector-metaculus
+            path: services/connector-metaculus
+          - component: connector-polymarket
+            path: services/connector-polymarket
+          - component: data-layer
+            path: services/data-layer
+          - component: notification-service
+            path: services/notification-service
+          - component: scheduler
+            path: services/scheduler
+          - component: scoring-engine
+            path: services/scoring-engine
+          - component: public-leaderboard
+            path: apps/public-leaderboard
+          - component: public-profile
+            path: apps/public-profile
+          - component: user-dashboard
+            path: apps/user-dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build ${{ matrix.component }}
+        run: |
+          docker build -f ${{ matrix.path }}/Containerfile ${{ matrix.path }} \
+            --tag tiresias/${{ matrix.component }}:${{ github.sha }}
