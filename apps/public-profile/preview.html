@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>@jeremiah_b — Tiresias (Preview)</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #f5f6fa;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: #1a1f2e;
+    }
+
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 40px 24px 64px;
+    }
+
+    /* ---- Preview banner ---- */
+    .preview-banner {
+      background: #fef3c7;
+      border: 1px solid #fcd34d;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 13px;
+      color: #92400e;
+      margin-bottom: 28px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* ---- Card ---- */
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.07);
+    }
+
+    /* ---- Profile Header ---- */
+    .profile-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 24px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+
+    .avatar-placeholder {
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #4f8ef7 0%, #6c5ce7 100%);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 32px; font-weight: 700; color: #fff;
+      flex-shrink: 0;
+    }
+
+    .profile-meta { flex: 1; min-width: 0; }
+
+    .display-name { font-size: 26px; font-weight: 700; color: #1a1f2e; margin-bottom: 4px; }
+    .username     { font-size: 14px; color: #9ca3af; margin-bottom: 10px; }
+    .bio          { font-size: 14px; color: #4b5563; margin-bottom: 14px; line-height: 1.55; max-width: 540px; }
+
+    .socials { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    .social-link {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 13px; font-weight: 500; color: #4b5563;
+      background: #f3f4f6; border-radius: 20px; padding: 4px 12px;
+      text-decoration: none; transition: background .15s, color .15s;
+    }
+    .social-link:hover { background: #e5e7eb; color: #1a1f2e; }
+    .social-icon { font-weight: 700; }
+
+    /* ---- Stat Cards ---- */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card { display: flex; flex-direction: column; gap: 4px; }
+
+    .stat-label {
+      font-size: 11px; font-weight: 700; color: #9ca3af;
+      text-transform: uppercase; letter-spacing: .07em;
+    }
+
+    .stat-value { font-size: 30px; font-weight: 700; color: #1a1f2e; line-height: 1.1; }
+    .stat-value.positive { color: #059669; }
+    .stat-denom { font-size: 18px; font-weight: 400; color: #9ca3af; }
+    .stat-sub   { font-size: 12px; color: #9ca3af; }
+
+    /* ---- Mid Row ---- */
+    .mid-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .section-title {
+      font-size: 15px; font-weight: 600; color: #374151;
+      margin-bottom: 16px;
+      display: flex; align-items: baseline; gap: 6px;
+    }
+    .section-sub { font-size: 12px; color: #9ca3af; margin-top: -10px; margin-bottom: 14px; }
+
+    /* ---- Badges ---- */
+    .badge-count { font-weight: 400; color: #9ca3af; font-size: 13px; }
+
+    .badge-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+
+    .badge {
+      border-radius: 10px; padding: 12px 8px;
+      text-align: center; display: flex;
+      flex-direction: column; align-items: center; gap: 5px;
+      cursor: default;
+    }
+
+    .badge-earned { background: #f0fdf4; border: 1px solid #bbf7d0; }
+    .badge-locked { background: #f9fafb; border: 1px solid #e5e7eb; opacity: .55; }
+    .badge-icon   { font-size: 22px; }
+    .badge-name   { font-size: 11px; font-weight: 600; color: #374151; line-height: 1.3; }
+
+    /* ---- Platform Breakdown ---- */
+    .platform-list { display: flex; flex-direction: column; gap: 13px; }
+
+    .platform-row { display: flex; align-items: center; gap: 10px; }
+
+    .platform-chip {
+      font-size: 12px; font-weight: 600; padding: 3px 10px;
+      border-radius: 20px; width: 96px; text-align: center;
+      flex-shrink: 0; text-transform: capitalize;
+    }
+
+    .bar-wrap {
+      flex: 1; background: #f3f4f6;
+      border-radius: 4px; height: 8px; overflow: hidden;
+    }
+
+    .bar { height: 100%; border-radius: 4px; }
+
+    .platform-score {
+      font-size: 13px; font-weight: 600; color: #374151;
+      width: 40px; text-align: right; flex-shrink: 0;
+    }
+
+    /* ---- Recent Predictions ---- */
+    .table { width: 100%; border-collapse: collapse; font-size: 14px; }
+
+    .table th {
+      text-align: left; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .05em;
+      color: #9ca3af; padding: 0 12px 10px 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .table td {
+      padding: 12px 12px 12px 0;
+      border-bottom: 1px solid #f9fafb;
+      vertical-align: middle; color: #374151;
+    }
+
+    .table tbody tr:last-child td { border-bottom: none; }
+
+    .market-title {
+      max-width: 300px; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+      color: #1a1f2e; font-weight: 500;
+    }
+
+    .source-chip { font-size: 12px; font-weight: 600; text-transform: capitalize; }
+
+    .num { font-variant-numeric: tabular-nums; font-weight: 500; }
+
+    .outcome {
+      display: inline-block; font-size: 11px; font-weight: 700;
+      padding: 2px 8px; border-radius: 20px; letter-spacing: .04em;
+    }
+    .outcome.yes     { background: #d1fae5; color: #065f46; }
+    .outcome.no      { background: #fee2e2; color: #991b1b; }
+    .outcome.pending { background: #fef3c7; color: #92400e; }
+
+    .date { color: #9ca3af; font-size: 13px; white-space: nowrap; }
+
+    /* ---- Responsive ---- */
+    @media (max-width: 860px) {
+      .cards { grid-template-columns: repeat(2, 1fr); }
+      .mid-row { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 540px) {
+      .cards { grid-template-columns: repeat(2, 1fr); }
+      .badge-grid { grid-template-columns: repeat(2, 1fr); }
+      .market-title { max-width: 160px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+
+  <div class="preview-banner">
+    ⚠️ Static preview — mock data only. This mirrors <code>src/routes/u/[username]/+page.svelte</code>.
+  </div>
+
+  <!-- ===== Profile Header ===== -->
+  <header class="profile-header">
+    <div class="avatar-placeholder">J</div>
+    <div class="profile-meta">
+      <h1 class="display-name">Jeremiah B.</h1>
+      <p class="username">@jeremiah_b · forecasting since 2024</p>
+      <p class="bio">Forecaster tracking markets across Kalshi, Polymarket, Manifold, and Metaculus.</p>
+      <div class="socials">
+        <a class="social-link" href="https://twitter.com/jeremiahb" target="_blank" rel="noopener">
+          <span class="social-icon">𝕏</span> Twitter
+        </a>
+        <a class="social-link" href="https://kalshi.com/profile/jeremiah_b_kalshi" target="_blank" rel="noopener">
+          <span class="social-icon">K</span> Kalshi
+        </a>
+        <a class="social-link" href="https://polymarket.com/profile/0xabc123" target="_blank" rel="noopener">
+          <span class="social-icon">P</span> Polymarket
+        </a>
+        <a class="social-link" href="https://manifold.markets/JeremiahB" target="_blank" rel="noopener">
+          <span class="social-icon">M</span> Manifold
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== Stat Cards ===== -->
+  <section class="cards">
+    <div class="card stat-card">
+      <div class="stat-label">Mean Brier Score</div>
+      <div class="stat-value">0.162</div>
+      <div class="stat-sub">lower is better · 0 = perfect</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-label">Brier Skill Score</div>
+      <div class="stat-value positive">0.237</div>
+      <div class="stat-sub">BSS &gt; 0 beats the baseline</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-label">Accuracy</div>
+      <div class="stat-value">72.0%</div>
+      <div class="stat-sub">directional correctness</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-label">Predictions</div>
+      <div class="stat-value">189<span class="stat-denom"> / 247</span></div>
+      <div class="stat-sub">77% resolved</div>
+    </div>
+  </section>
+
+  <!-- ===== Badges + Platform ===== -->
+  <section class="mid-row">
+
+    <div class="card badge-card">
+      <h2 class="section-title">Badges <span class="badge-count">5 / 6</span></h2>
+      <div class="badge-grid">
+        <div class="badge badge-earned" title="Made at least one resolved prediction. Earned Sep 14, 2024">
+          <span class="badge-icon">🎯</span>
+          <span class="badge-name">First Prediction</span>
+        </div>
+        <div class="badge badge-earned" title="Made at least 10 resolved predictions. Earned Oct 1, 2024">
+          <span class="badge-icon">🌱</span>
+          <span class="badge-name">Getting Started</span>
+        </div>
+        <div class="badge badge-earned" title="Made at least 100 resolved predictions. Earned Mar 15, 2025">
+          <span class="badge-icon">📊</span>
+          <span class="badge-name">Prolific Forecaster</span>
+        </div>
+        <div class="badge badge-earned" title="Brier Skill Score > 0. Earned Jan 8, 2025">
+          <span class="badge-icon">🪙</span>
+          <span class="badge-name">Better Than Coin Flip</span>
+        </div>
+        <div class="badge badge-earned" title="Resolved predictions on 3+ platforms. Earned Jun 1, 2025">
+          <span class="badge-icon">🌐</span>
+          <span class="badge-name">Cross-Platform Forecaster</span>
+        </div>
+        <div class="badge badge-locked" title="Expected Calibration Error below 0.05 with 50+ predictions.">
+          <span class="badge-icon">🔒</span>
+          <span class="badge-name">Well Calibrated</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card platform-card">
+      <h2 class="section-title">Platform Breakdown</h2>
+      <p class="section-sub">Mean Brier score per platform — lower is better</p>
+      <div class="platform-list">
+        <div class="platform-row">
+          <span class="platform-chip" style="background:#00b89418;color:#00b894">kalshi</span>
+          <div class="bar-wrap"><div class="bar" style="width:85%;background:#00b894"></div></div>
+          <span class="platform-score">0.148</span>
+        </div>
+        <div class="platform-row">
+          <span class="platform-chip" style="background:#e1705518;color:#e17055">manifold</span>
+          <div class="bar-wrap"><div class="bar" style="width:84%;background:#e17055"></div></div>
+          <span class="platform-score">0.155</span>
+        </div>
+        <div class="platform-row">
+          <span class="platform-chip" style="background:#6c5ce718;color:#6c5ce7">polymarket</span>
+          <div class="bar-wrap"><div class="bar" style="width:83%;background:#6c5ce7"></div></div>
+          <span class="platform-score">0.171</span>
+        </div>
+        <div class="platform-row">
+          <span class="platform-chip" style="background:#0984e318;color:#0984e3">metaculus</span>
+          <div class="bar-wrap"><div class="bar" style="width:82%;background:#0984e3"></div></div>
+          <span class="platform-score">0.183</span>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ===== Recent Predictions ===== -->
+  <section class="card">
+    <h2 class="section-title">Recent Predictions</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Market</th>
+          <th>Platform</th>
+          <th>Probability</th>
+          <th>Outcome</th>
+          <th>Brier</th>
+          <th>Resolved</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="market-title">Will the Fed cut rates before June 2026?</td>
+          <td><span class="source-chip" style="color:#00b894">kalshi</span></td>
+          <td class="num">72.0%</td>
+          <td><span class="outcome yes">YES</span></td>
+          <td class="num">0.078</td>
+          <td class="date">Mar 20, 2026</td>
+        </tr>
+        <tr>
+          <td class="market-title">Will Bitcoin exceed $120k in Q1 2026?</td>
+          <td><span class="source-chip" style="color:#6c5ce7">polymarket</span></td>
+          <td class="num">35.0%</td>
+          <td><span class="outcome no">NO</span></td>
+          <td class="num">0.123</td>
+          <td class="date">Mar 31, 2026</td>
+        </tr>
+        <tr>
+          <td class="market-title">Will SpaceX launch Starship to orbit by end of 2025?</td>
+          <td><span class="source-chip" style="color:#e17055">manifold</span></td>
+          <td class="num">65.0%</td>
+          <td><span class="outcome yes">YES</span></td>
+          <td class="num">0.123</td>
+          <td class="date">Dec 28, 2025</td>
+        </tr>
+        <tr>
+          <td class="market-title">Will a major AI lab release a model scoring 90%+ on MMLU?</td>
+          <td><span class="source-chip" style="color:#0984e3">metaculus</span></td>
+          <td class="num">88.0%</td>
+          <td><span class="outcome yes">YES</span></td>
+          <td class="num">0.014</td>
+          <td class="date">Nov 15, 2025</td>
+        </tr>
+        <tr>
+          <td class="market-title">Will Ethereum ETF see $10B+ net inflows in 2025?</td>
+          <td><span class="source-chip" style="color:#00b894">kalshi</span></td>
+          <td class="num">41.0%</td>
+          <td><span class="outcome no">NO</span></td>
+          <td class="num">0.168</td>
+          <td class="date">Dec 31, 2025</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+</main>
+</body>
+</html>
