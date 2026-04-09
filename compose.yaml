@@ -1,0 +1,43 @@
+# compose.yaml — Tiresias local development stack
+#
+# Usage:
+#   podman compose up -d db        # start Postgres only
+#   podman compose run --rm migrate # run migrations
+#   podman compose down            # stop everything (data persists in ./data/postgres)
+#
+# The Postgres data directory is bind-mounted to ./data/postgres so the
+# database survives container restarts and can be backed up or wiped
+# independently of the application.
+
+services:
+
+  db:
+    image: docker.io/postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: tiresias
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d tiresias"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  migrate:
+    build:
+      context: ./services/data-layer
+      dockerfile: Containerfile
+    working_dir: /app
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/tiresias
+    depends_on:
+      db:
+        condition: service_healthy
+    # One-shot: runs migrations then exits
+    restart: "no"

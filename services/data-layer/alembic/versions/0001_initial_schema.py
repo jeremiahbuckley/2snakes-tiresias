@@ -17,11 +17,10 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+market_outcome = sa.Enum("yes", "no", "ambiguous", name="market_outcome")
+
+
 def upgrade() -> None:
-    # ------------------------------------------------------------------
-    # Enums
-    # ------------------------------------------------------------------
-    op.execute("CREATE TYPE market_outcome AS ENUM ('yes', 'no', 'ambiguous')")
 
     # ------------------------------------------------------------------
     # users
@@ -74,11 +73,7 @@ def upgrade() -> None:
         sa.Column("closes_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("resolves_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column(
-            "outcome",
-            sa.Enum("yes", "no", "ambiguous", name="market_outcome", create_type=False),
-            nullable=True,
-        ),
+        sa.Column("outcome", market_outcome, nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -193,4 +188,4 @@ def downgrade() -> None:
     op.drop_table("predictions")
     op.drop_table("markets")
     op.drop_table("users")
-    op.execute("DROP TYPE market_outcome")
+    market_outcome.drop(op.get_bind())

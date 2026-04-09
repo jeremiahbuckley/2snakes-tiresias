@@ -23,10 +23,11 @@ COPY alembic/ ./alembic/
 COPY data/ ./data/
 
 # Run as non-root
-RUN adduser --disabled-password --gecos "" appuser
+RUN adduser --disabled-password --gecos "" appuser && chown -R appuser:appuser /app
 USER appuser
 
+ENV PYTHONPATH=/app
 ENV DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/tiresias
 
 # Upgrade to latest revision by default; override CMD for other alembic commands
-CMD ["alembic", "upgrade", "head"]
+CMD ["alembic", "-c", "/app/alembic.ini", "upgrade", "head"]
