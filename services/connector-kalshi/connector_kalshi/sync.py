@@ -1,24 +1,40 @@
 """
 Kalshi sync entrypoint.
 
-Called by the scheduler to pull new markets and resolve predictions.
+Called by the scheduler. V1 scope:
+  - Pull a user's fills (bets placed) and settlements (resolved outcomes).
+  - Pull market metadata on-demand for each unique market in those fills.
+
+Markets are stored separately from bets; the link is market_external_id.
 """
 
 from __future__ import annotations
 
-from .adapter import normalise_market, normalise_prediction
+from .adapter import normalise_fill, normalise_market, normalise_settlement
 from .client import KalshiClient
 
 
-async def sync_markets() -> list[dict]:
-    """Fetch all active Kalshi markets and return normalised dicts."""
+async def sync_user_fills(user_id: str) -> list[dict]:
+    """Fetch the authenticated user's fill history and return normalised bets."""
     client = KalshiClient()
-    raw_markets = await client.get_markets(status="open")
-    return [normalise_market(m) for m in raw_markets]
+    raw_fills = await client.get_fills()
+    return [normalise_fill(f, user_id) for f in raw_fills]
 
 
-async def sync_user_predictions(user_id: str, kalshi_user_id: str) -> list[dict]:
-    """Fetch a user's Kalshi trade history and return normalised predictions."""
+async def sync_user_settlements(user_id: str) -> list[dict]:
+    """Fetch the authenticated user's settlement history (resolved bet outcomes)."""
     client = KalshiClient()
-    raw_trades = await client.get_user_trades(kalshi_user_id)
-    return [normalise_prediction(t, user_id) for t in raw_trades]
+    raw_settlements = await client.get_settlements()
+    return [normalise_settlement(s, user_id) for s in raw_settlements]
+
+
+async def sync_market(ticker: str) -> dict:
+    """
+    Fetch metadata for a single market by ticker.
+
+    Called after sync_user_fills to hydrate the unique markets referenced
+    by those fills. Only fetches markets the user has actually bet on.
+    """
+    client = KalshiClient()
+    raw = await client.get_market(ticker)
+    return normalise_market(raw)

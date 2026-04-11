@@ -2,21 +2,21 @@
 Kalshi → Tiresias adapter.
 
 Converts raw Kalshi API objects into the normalised internal dicts expected
-by the data layer (Market, Prediction).
+by the data layer. Three separate record types:
+
+  Market     — metadata about a prediction market (question, resolution, etc.)
+  Fill       — a user's individual bet execution
+  Settlement — resolution outcome for a user's position in a market
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 
 def normalise_market(raw: dict[str, Any]) -> dict[str, Any]:
-    """
-    Map a raw Kalshi market object to the internal Market schema.
-
-    TODO: map all relevant fields; add resolution logic.
-    """
+    """Map a raw Kalshi market object to the internal Market schema."""
     return {
         "external_id": raw.get("ticker"),
         "source": "kalshi",
@@ -31,20 +31,44 @@ def normalise_market(raw: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def normalise_prediction(raw_trade: dict[str, Any], user_id: str) -> dict[str, Any]:
+def normalise_fill(raw: dict[str, Any], user_id: str) -> dict[str, Any]:
     """
-    Map a raw Kalshi trade to the internal Prediction schema.
+    Map a raw Kalshi portfolio fill to the internal Bet schema.
 
-    TODO: handle multi-leg trades; map count → probability.
+    A fill is one execution of an order — the user bought or sold contracts
+    in a market at a specific price. yes_price is in cents (0–100).
     """
     return {
-        "external_id": raw_trade.get("trade_id"),
+        "external_id": raw.get("trade_id"),
         "source": "kalshi",
         "user_external_id": user_id,
-        "market_external_id": raw_trade.get("ticker"),
-        "predicted_probability": _yes_probability(raw_trade),
-        "placed_at": _parse_ts(raw_trade.get("created_time")),
-        "raw": raw_trade,
+        "market_external_id": raw.get("ticker"),
+        "side": raw.get("side"),                      # "yes" | "no"
+        "action": raw.get("action"),                  # "buy" | "sell"
+        "count": raw.get("count"),                    # number of contracts
+        "yes_price": raw.get("yes_price"),            # price paid in cents (0–100)
+        "predicted_probability": _yes_probability(raw),
+        "placed_at": _parse_ts(raw.get("created_time")),
+        "raw": raw,
+    }
+
+
+def normalise_settlement(raw: dict[str, Any], user_id: str) -> dict[str, Any]:
+    """
+    Map a raw Kalshi portfolio settlement to the internal Settlement schema.
+
+    A settlement is the final payout event when a market resolves.
+    revenue is in cents.
+    """
+    return {
+        "external_id": raw.get("market_result"),      # no unique ID; use composite key in data layer
+        "source": "kalshi",
+        "user_external_id": user_id,
+        "market_external_id": raw.get("ticker"),
+        "market_result": raw.get("market_result"),    # "yes" | "no"
+        "revenue": raw.get("revenue"),                # payout in cents (can be negative)
+        "settled_at": _parse_ts(raw.get("updated_time")),
+        "raw": raw,
     }
 
 
@@ -58,9 +82,9 @@ def _parse_ts(ts: str | None) -> datetime | None:
     return datetime.fromisoformat(ts.replace("Z", "+00:00"))
 
 
-def _yes_probability(trade: dict[str, Any]) -> float | None:
-    """Approximate yes-probability from a Kalshi trade's yes_price (0-100 cents)."""
-    yes_price = trade.get("yes_price")
+def _yes_probability(fill: dict[str, Any]) -> float | None:
+    """Convert yes_price (0–100 cents) to a probability (0.0–1.0)."""
+    yes_price = fill.get("yes_price")
     if yes_price is None:
         return None
     return yes_price / 100.0
