@@ -38,6 +38,19 @@ The REST connector handles point-in-time syncs. A WebSocket client (`ws_client.p
 
 ---
 
+## Go-to-Market
+
+### Per-user platform opt-in / opt-out
+Users should be able to choose which prediction market platforms they connect to Tiresias. This is both a UX preference and a legal necessity: Polymarket is restricted or blocked in many US states, and Kalshi has geographic restrictions as well. A user in a restricted region should never be shown a Polymarket onboarding flow, and a user who simply doesn't use a given platform shouldn't have to connect it.
+
+Things to think through:
+- The auth-service linked accounts model already implies opt-in per platform (you only link what you use), but this needs to be surfaced clearly in the onboarding UI.
+- Geographic restrictions should ideally be checked at signup/linking time and used to hide unavailable platforms entirely rather than showing them grayed out. Polymarket publishes a geoblock list; Kalshi restricts certain markets by state.
+- Consider whether platform availability should be stored server-side (so it can be updated without a client deploy) or derived at runtime from the user's region.
+- For users who later move into or out of a restricted region, there should be a path to link/unlink platforms without losing historical data.
+
+---
+
 ## Auth & Account Linking
 
 ### Credential encryption at rest
