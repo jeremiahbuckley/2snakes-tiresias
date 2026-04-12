@@ -23,11 +23,6 @@
       <div class="alert alert-error">{form.error}</div>
     {/if}
 
-    <div class="dev-notice">
-      <strong>Development mode</strong> — auth backend is not yet active.
-      Use the bypass button below to access the dashboard with mock data.
-    </div>
-
     <form
       method="POST"
       action="?/login"
@@ -118,17 +113,6 @@
   .subtitle {
     color: #6b7280;
     font-size: 14px;
-  }
-
-  .dev-notice {
-    background: #fffbeb;
-    border: 1px solid #fcd34d;
-    border-radius: 8px;
-    padding: 12px 14px;
-    font-size: 13px;
-    color: #92400e;
-    margin-bottom: 20px;
-    line-height: 1.5;
   }
 
   .alert {

@@ -1,97 +1,171 @@
-import {
-  mockUser,
-  mockLinkedAccounts,
-  mockSocialAccounts,
-  mockShareTokens,
-  mockNotificationPrefs,
-} from '$lib/mock.js';
-import { fail } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
+
+const API_BASE = process.env.API_BASE_URL ?? 'http://localhost:8000';
+
+const MARKET_PLATFORMS = ['kalshi', 'polymarket', 'manifold', 'metaculus'];
+const SOCIAL_PLATFORMS = ['x', 'bluesky'];
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Thin fetch wrapper — throws { status, detail } on non-ok responses. */
+async function api(fetch, path, { token, method = 'GET', body } = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  if (res.status === 204) return null;
+  if (!res.ok) {
+    const detail = await res.text().catch(() => res.statusText);
+    throw { status: res.status, detail };
+  }
+  return res.json();
+}
+
+/**
+ * Convert the flat linked-accounts array from the API into two keyed objects
+ * the UI expects: { kalshi: { linked, external_identifier, … }, … }
+ */
+function reshapeAccounts(list) {
+  const empty = () => ({ linked: false, external_identifier: null, linked_at: null, is_enabled: false, is_verified: false });
+
+  const linkedAccounts = Object.fromEntries(MARKET_PLATFORMS.map((p) => [p, empty()]));
+  const socialAccounts = Object.fromEntries(SOCIAL_PLATFORMS.map((p) => [p, empty()]));
+
+  for (const acct of list) {
+    const shaped = {
+      linked: true,
+      external_identifier: acct.external_identifier,
+      linked_at: acct.linked_at,
+      is_enabled: acct.is_enabled,
+      is_verified: acct.is_verified,
+    };
+    if (MARKET_PLATFORMS.includes(acct.platform)) linkedAccounts[acct.platform] = shaped;
+    if (SOCIAL_PLATFORMS.includes(acct.platform)) socialAccounts[acct.platform] = shaped;
+  }
+
+  return { linkedAccounts, socialAccounts };
+}
+
+// ---------------------------------------------------------------------------
+// Load
+// ---------------------------------------------------------------------------
 
 /** @type {import('./$types').PageServerLoad} */
-export async function load() {
-  // TODO: replace with real API calls once api-gateway is live:
-  //   const token = event.cookies.get('tiresias_token');
-  //   const user = await getMe(token);
-  //   const linked = await getLinkedAccounts(token);
-  //   const shareTokens = await getShareTokens(token);
-  //   const notifPrefs = await getNotificationPrefs(token);
+export async function load({ cookies, fetch, parent }) {
+  // token and user are already fetched by the layout — reuse them.
+  const { token, user } = await parent();
 
-  return {
-    user: mockUser,
-    linkedAccounts: mockLinkedAccounts,
-    socialAccounts: mockSocialAccounts,
-    shareTokens: mockShareTokens,
-    notificationPrefs: mockNotificationPrefs,
-  };
+  let accountsList, shareTokens, notificationPrefs;
+  try {
+    [accountsList, shareTokens, notificationPrefs] = await Promise.all([
+      api(fetch, '/auth/me/linked-accounts', { token }),
+      api(fetch, '/auth/me/share-tokens', { token }),
+      api(fetch, '/auth/me/notifications', { token }),
+    ]);
+  } catch (err) {
+    if (err.status === 401) throw redirect(303, '/login');
+    // Surface other errors to the page rather than crashing
+    accountsList = [];
+    shareTokens = [];
+    notificationPrefs = { email_on_resolution: true, email_on_badge: true, email_on_rank_change: false };
+  }
+
+  const { linkedAccounts, socialAccounts } = reshapeAccounts(accountsList);
+
+  return { user, linkedAccounts, socialAccounts, shareTokens, notificationPrefs };
 }
+
+// ---------------------------------------------------------------------------
+// Actions
+// ---------------------------------------------------------------------------
 
 /** @type {import('./$types').Actions} */
 export const actions = {
 
-  // --------------------------------------------------------------------------
-  // Profile
-  // --------------------------------------------------------------------------
+  // ---- Profile -------------------------------------------------------------
 
-  /** Save profile changes (display_name, bio, avatar_url). */
-  saveProfile: async ({ request }) => {
+  saveProfile: async ({ request, cookies, fetch }) => {
+    const token = cookies.get('tiresias_token');
     const data = await request.formData();
-    const display_name = data.get('display_name')?.toString() ?? '';
-    const bio = data.get('bio')?.toString() ?? '';
-    const avatar_url = data.get('avatar_url')?.toString() ?? '';
-
-    // TODO: PATCH /auth/me/profile  { display_name, bio, avatar_url }
-    console.log('saveProfile (stub):', { display_name, bio, avatar_url });
+    try {
+      await api(fetch, '/auth/me/profile', {
+        token,
+        method: 'PATCH',
+        body: {
+          display_name: data.get('display_name') || null,
+          bio: data.get('bio') || null,
+          avatar_url: data.get('avatar_url') || null,
+        },
+      });
+    } catch (err) {
+      return fail(err.status ?? 500, { error: 'Could not save profile. Please try again.' });
+    }
     return { success: true, action: 'profile' };
   },
 
-  // --------------------------------------------------------------------------
-  // Market account management
-  // --------------------------------------------------------------------------
+  // ---- Market accounts -----------------------------------------------------
 
-  /** Connect or update a prediction market account. */
-  linkMarketAccount: async ({ request }) => {
+  linkMarketAccount: async ({ request, cookies, fetch }) => {
+    const token = cookies.get('tiresias_token');
     const data = await request.formData();
     const platform = data.get('platform')?.toString() ?? '';
     const identifier = data.get('identifier')?.toString() ?? '';
     const credential = data.get('credential')?.toString() ?? '';
 
     if (!identifier || !credential) {
-      return fail(400, { error: 'Identifier and API key are required.', platform });
+      return fail(400, { error: 'Identifier and credential are required.', platform });
     }
-
-    // TODO: PUT /auth/me/linked-accounts/{platform}
-    //   { external_identifier: identifier, credential, is_enabled: true }
-    console.log('linkMarketAccount (stub):', { platform, identifier });
+    try {
+      await api(fetch, `/auth/me/linked-accounts/${platform}`, {
+        token,
+        method: 'PUT',
+        body: { external_identifier: identifier, credential, is_enabled: true },
+      });
+    } catch (err) {
+      return fail(err.status ?? 500, { error: 'Could not link account. Check your credentials and try again.', platform });
+    }
     return { success: true, action: 'marketLink', platform };
   },
 
-  /** Disconnect a prediction market account. */
-  unlinkMarketAccount: async ({ request }) => {
+  unlinkMarketAccount: async ({ request, cookies, fetch }) => {
+    const token = cookies.get('tiresias_token');
     const data = await request.formData();
     const platform = data.get('platform')?.toString() ?? '';
-
-    // TODO: DELETE /auth/me/linked-accounts/{platform}
-    console.log('unlinkMarketAccount (stub):', { platform });
+    try {
+      await api(fetch, `/auth/me/linked-accounts/${platform}`, { token, method: 'DELETE' });
+    } catch (err) {
+      return fail(err.status ?? 500, { error: 'Could not disconnect account.' });
+    }
     return { success: true, action: 'marketUnlink', platform };
   },
 
-  /** Toggle whether a connected market is included in scoring. */
-  toggleMarketEnabled: async ({ request }) => {
+  toggleMarketEnabled: async ({ request, cookies, fetch }) => {
+    const token = cookies.get('tiresias_token');
     const data = await request.formData();
     const platform = data.get('platform')?.toString() ?? '';
     const is_enabled = data.get('is_enabled') === 'true';
-
-    // TODO: PATCH /auth/me/linked-accounts/{platform}  { is_enabled }
-    console.log('toggleMarketEnabled (stub):', { platform, is_enabled });
+    try {
+      await api(fetch, `/auth/me/linked-accounts/${platform}`, {
+        token,
+        method: 'PATCH',
+        body: { is_enabled },
+      });
+    } catch (err) {
+      return fail(err.status ?? 500, { error: 'Could not update preference.' });
+    }
     return { success: true, action: 'marketToggle', platform };
   },
 
-  // --------------------------------------------------------------------------
-  // Social account management
-  // --------------------------------------------------------------------------
+  // ---- Social accounts -----------------------------------------------------
 
-  /** Connect or update a social platform (X or Bluesky). */
-  linkSocialAccount: async ({ request }) => {
+  linkSocialAccount: async ({ request, cookies, fetch }) => {
+    const token = cookies.get('tiresias_token');
     const data = await request.formData();
     const platform = data.get('platform')?.toString() ?? '';
     const identifier = data.get('identifier')?.toString() ?? '';
@@ -100,76 +174,101 @@ export const actions = {
     if (!identifier || !credential) {
       return fail(400, { error: 'Handle and credential are required.', platform });
     }
-
-    // TODO: PUT /auth/me/linked-accounts/{platform}
-    //   { external_identifier: identifier, credential, is_enabled: true }
-    console.log('linkSocialAccount (stub):', { platform, identifier });
+    try {
+      await api(fetch, `/auth/me/linked-accounts/${platform}`, {
+        token,
+        method: 'PUT',
+        body: { external_identifier: identifier, credential, is_enabled: true },
+      });
+    } catch (err) {
+      return fail(err.status ?? 500, { error: 'Could not connect social account.', platform });
+    }
     return { success: true, action: 'socialLink', platform };
   },
 
-  /** Disconnect a social platform account. */
-  unlinkSocialAccount: async ({ request }) => {
+  unlinkSocialAccount: async ({ request, cookies, fetch }) => {
+    const token = cookies.get('tiresias_token');
     const data = await request.formData();
     const platform = data.get('platform')?.toString() ?? '';
-
-    // TODO: DELETE /auth/me/linked-accounts/{platform}
-    console.log('unlinkSocialAccount (stub):', { platform });
+    try {
+      await api(fetch, `/auth/me/linked-accounts/${platform}`, { token, method: 'DELETE' });
+    } catch (err) {
+      return fail(err.status ?? 500, { error: 'Could not disconnect account.' });
+    }
     return { success: true, action: 'socialUnlink', platform };
   },
 
-  /** Toggle auto-publish for a connected social platform. */
-  toggleSocialEnabled: async ({ request }) => {
+  toggleSocialEnabled: async ({ request, cookies, fetch }) => {
+    const token = cookies.get('tiresias_token');
     const data = await request.formData();
     const platform = data.get('platform')?.toString() ?? '';
     const is_enabled = data.get('is_enabled') === 'true';
-
-    // TODO: PATCH /auth/me/linked-accounts/{platform}  { is_enabled }
-    console.log('toggleSocialEnabled (stub):', { platform, is_enabled });
+    try {
+      await api(fetch, `/auth/me/linked-accounts/${platform}`, {
+        token,
+        method: 'PATCH',
+        body: { is_enabled },
+      });
+    } catch (err) {
+      return fail(err.status ?? 500, { error: 'Could not update preference.' });
+    }
     return { success: true, action: 'socialToggle', platform };
   },
 
-  // --------------------------------------------------------------------------
-  // Share tokens
-  // --------------------------------------------------------------------------
+  // ---- Share tokens --------------------------------------------------------
 
-  /** Generate a new anonymous share link. */
-  createShareToken: async ({ request }) => {
+  createShareToken: async ({ request, cookies, fetch }) => {
+    const token = cookies.get('tiresias_token');
     const data = await request.formData();
-    const label = data.get('label')?.toString() ?? null;
-    const show_scores = data.get('show_scores') === 'on';
-    const show_badges = data.get('show_badges') === 'on';
-    const show_predictions = data.get('show_predictions') === 'on';
-
-    // TODO: POST /auth/me/share-tokens  { label, show_scores, show_badges, show_predictions }
-    console.log('createShareToken (stub):', { label, show_scores, show_badges, show_predictions });
-    return { success: true, action: 'tokenCreate' };
+    let created;
+    try {
+      created = await api(fetch, '/auth/me/share-tokens', {
+        token,
+        method: 'POST',
+        body: {
+          label: data.get('label') || null,
+          show_scores: data.get('show_scores') === 'on',
+          show_badges: data.get('show_badges') === 'on',
+          show_predictions: data.get('show_predictions') === 'on',
+        },
+      });
+    } catch (err) {
+      return fail(err.status ?? 500, { error: 'Could not create share link.' });
+    }
+    // Return the real token slug so the enhance callback can display it immediately
+    return { success: true, action: 'tokenCreate', created };
   },
 
-  /** Revoke an existing share token. */
-  revokeShareToken: async ({ request }) => {
+  revokeShareToken: async ({ request, cookies, fetch }) => {
+    const token = cookies.get('tiresias_token');
     const data = await request.formData();
-    const token = data.get('token')?.toString() ?? '';
-
-    // TODO: DELETE /auth/me/share-tokens/{token}
-    console.log('revokeShareToken (stub):', { token });
+    const slug = data.get('token')?.toString() ?? '';
+    try {
+      await api(fetch, `/auth/me/share-tokens/${slug}`, { token, method: 'DELETE' });
+    } catch (err) {
+      return fail(err.status ?? 500, { error: 'Could not revoke share link.' });
+    }
     return { success: true, action: 'tokenRevoke' };
   },
 
-  // --------------------------------------------------------------------------
-  // Notification preferences
-  // --------------------------------------------------------------------------
+  // ---- Notifications -------------------------------------------------------
 
-  /** Save notification preferences. */
-  saveNotifications: async ({ request }) => {
+  saveNotifications: async ({ request, cookies, fetch }) => {
+    const token = cookies.get('tiresias_token');
     const data = await request.formData();
-    const prefs = {
-      email_on_resolution: data.get('email_on_resolution') === 'on',
-      email_on_badge: data.get('email_on_badge') === 'on',
-      email_on_rank_change: data.get('email_on_rank_change') === 'on',
-    };
-
-    // TODO: PATCH /auth/me/notifications  { ...prefs }
-    console.log('saveNotifications (stub):', prefs);
+    try {
+      await api(fetch, '/auth/me/notifications', {
+        token,
+        method: 'PATCH',
+        body: {
+          email_on_resolution: data.get('email_on_resolution') === 'on',
+          email_on_badge: data.get('email_on_badge') === 'on',
+          email_on_rank_change: data.get('email_on_rank_change') === 'on',
+        },
+      });
+    } catch (err) {
+      return fail(err.status ?? 500, { error: 'Could not save notification preferences.' });
+    }
     return { success: true, action: 'notifications' };
   },
 };

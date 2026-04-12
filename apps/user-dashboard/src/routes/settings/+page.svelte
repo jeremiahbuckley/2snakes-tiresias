@@ -71,10 +71,18 @@
     },
   ];
 
-  // ---- State --------------------------------------------------------------
+  // ---- Local mutable state (initialized from server data) -----------------
+  // Using `let` rather than const destructuring so enhance callbacks can
+  // update these optimistically without waiting for load() to re-run.
+  let markets      = { ...data.linkedAccounts };
+  let socials      = { ...data.socialAccounts };
+  let tokens       = [...data.shareTokens];
+  let notifPrefs   = { ...data.notificationPrefs };
+
   let linkingMarket = null;
   let linkingSocial = null;
   let showCreateTokenForm = false;
+  let successMessage = null;
 
   function toggleMarketLink(platformId) {
     linkingMarket = linkingMarket === platformId ? null : platformId;
@@ -98,8 +106,115 @@
     return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
-  // Success / error feedback
-  $: successAction = form?.success ? form.action : null;
+  function flash(msg) {
+    successMessage = msg;
+    setTimeout(() => (successMessage = null), 3000);
+  }
+
+  // ---- Enhance callbacks — optimistic UI updates --------------------------
+
+  function enhanceMarketLink(platform) {
+    return ({ formData }) => async ({ result, update }) => {
+      if (result.type === 'success') {
+        const identifier = formData.get('identifier');
+        markets = {
+          ...markets,
+          [platform]: { linked: true, external_identifier: identifier, linked_at: new Date().toISOString(), is_enabled: true, is_verified: false },
+        };
+        linkingMarket = null;
+        flash('Market account connected.');
+      }
+      await update({ reset: false });
+    };
+  }
+
+  function enhanceMarketUnlink(platform) {
+    return () => async ({ result, update }) => {
+      if (result.type === 'success') {
+        markets = {
+          ...markets,
+          [platform]: { linked: false, external_identifier: null, linked_at: null, is_enabled: false, is_verified: false },
+        };
+        flash('Market account disconnected.');
+      }
+      await update({ reset: false });
+    };
+  }
+
+  function enhanceMarketToggle(platform) {
+    return () => async ({ result, update }) => {
+      if (result.type === 'success') {
+        markets = {
+          ...markets,
+          [platform]: { ...markets[platform], is_enabled: !markets[platform].is_enabled },
+        };
+        flash('Data source preference updated.');
+      }
+      await update({ reset: false });
+    };
+  }
+
+  function enhanceSocialLink(platform) {
+    return ({ formData }) => async ({ result, update }) => {
+      if (result.type === 'success') {
+        const identifier = formData.get('identifier');
+        socials = {
+          ...socials,
+          [platform]: { linked: true, external_identifier: identifier, linked_at: new Date().toISOString(), is_enabled: true, is_verified: false },
+        };
+        linkingSocial = null;
+        flash('Social account connected.');
+      }
+      await update({ reset: false });
+    };
+  }
+
+  function enhanceSocialUnlink(platform) {
+    return () => async ({ result, update }) => {
+      if (result.type === 'success') {
+        socials = {
+          ...socials,
+          [platform]: { linked: false, external_identifier: null, linked_at: null, is_enabled: false, is_verified: false },
+        };
+        flash('Social account disconnected.');
+      }
+      await update({ reset: false });
+    };
+  }
+
+  function enhanceSocialToggle(platform) {
+    return () => async ({ result, update }) => {
+      if (result.type === 'success') {
+        socials = {
+          ...socials,
+          [platform]: { ...socials[platform], is_enabled: !socials[platform].is_enabled },
+        };
+        flash('Publishing preference updated.');
+      }
+      await update({ reset: false });
+    };
+  }
+
+  function enhanceCreateToken() {
+    return () => async ({ result, update }) => {
+      if (result.type === 'success' && result.data?.created) {
+        tokens = [...tokens, result.data.created];
+        showCreateTokenForm = false;
+        flash('Share link created.');
+      }
+      await update({ reset: false });
+    };
+  }
+
+  function enhanceRevokeToken(slug) {
+    return () => async ({ result, update }) => {
+      if (result.type === 'success') {
+        tokens = tokens.filter(t => t.token !== slug);
+        flash('Share link revoked.');
+      }
+      await update({ reset: false });
+    };
+  }
 </script>
 
 <svelte:head>
@@ -111,20 +226,8 @@
   <p class="subtitle">Manage your profile, data sources, publishing, and sharing preferences</p>
 </div>
 
-{#if successAction}
-  <div class="alert alert-success">
-    {#if successAction === 'profile'}Profile saved.
-    {:else if successAction === 'marketLink'}Market account connected.
-    {:else if successAction === 'marketUnlink'}Market account disconnected.
-    {:else if successAction === 'marketToggle'}Data source preference updated.
-    {:else if successAction === 'socialLink'}Social account connected.
-    {:else if successAction === 'socialUnlink'}Social account disconnected.
-    {:else if successAction === 'socialToggle'}Publishing preference updated.
-    {:else if successAction === 'tokenCreate'}Share link created.
-    {:else if successAction === 'tokenRevoke'}Share link revoked.
-    {:else if successAction === 'notifications'}Notification preferences updated.
-    {/if}
-  </div>
+{#if successMessage}
+  <div class="alert alert-success">{successMessage}</div>
 {/if}
 
 {#if form?.error}
@@ -190,7 +293,7 @@
 
   <div class="platform-list">
     {#each marketPlatforms as platform}
-      {@const acct = linkedAccounts[platform.id]}
+      {@const acct = markets[platform.id]}
       {@const isLinked = acct?.linked}
 
       <div class="platform-item" class:is-linked={isLinked}>
@@ -205,7 +308,7 @@
         <div class="platform-status">
           {#if isLinked}
             <!-- Enable / disable toggle -->
-            <form method="POST" action="?/toggleMarketEnabled" use:enhance class="toggle-form">
+            <form method="POST" action="?/toggleMarketEnabled" use:enhance={enhanceMarketToggle(platform.id)} class="toggle-form">
               <input type="hidden" name="platform" value={platform.id} />
               <input type="hidden" name="is_enabled" value={acct.is_enabled ? 'false' : 'true'} />
               <button
@@ -223,7 +326,7 @@
               <span class="linked-since">since {fmtDate(acct.linked_at)}</span>
             </div>
             <span class="status-badge connected">Connected</span>
-            <form method="POST" action="?/unlinkMarketAccount" use:enhance>
+            <form method="POST" action="?/unlinkMarketAccount" use:enhance={enhanceMarketUnlink(platform.id)}>
               <input type="hidden" name="platform" value={platform.id} />
               <button type="submit" class="btn btn-danger-sm">Disconnect</button>
             </form>
@@ -238,7 +341,7 @@
 
       {#if linkingMarket === platform.id && !isLinked}
         <div class="link-form-wrap">
-          <form method="POST" action="?/linkMarketAccount" use:enhance class="link-form">
+          <form method="POST" action="?/linkMarketAccount" use:enhance={enhanceMarketLink(platform.id)} class="link-form">
             <input type="hidden" name="platform" value={platform.id} />
             <div class="field">
               <label for="market_id_{platform.id}">Username / Identifier</label>
@@ -281,7 +384,7 @@
 
   <div class="platform-list">
     {#each socialPlatforms as platform}
-      {@const acct = socialAccounts[platform.id]}
+      {@const acct = socials[platform.id]}
       {@const isLinked = acct?.linked}
 
       <div class="platform-item" class:is-linked={isLinked}>
@@ -296,7 +399,7 @@
         <div class="platform-status">
           {#if isLinked}
             <!-- Auto-publish toggle -->
-            <form method="POST" action="?/toggleSocialEnabled" use:enhance class="toggle-form">
+            <form method="POST" action="?/toggleSocialEnabled" use:enhance={enhanceSocialToggle(platform.id)} class="toggle-form">
               <input type="hidden" name="platform" value={platform.id} />
               <input type="hidden" name="is_enabled" value={acct.is_enabled ? 'false' : 'true'} />
               <button
@@ -314,7 +417,7 @@
               <span class="linked-since">since {fmtDate(acct.linked_at)}</span>
             </div>
             <span class="status-badge connected">Connected</span>
-            <form method="POST" action="?/unlinkSocialAccount" use:enhance>
+            <form method="POST" action="?/unlinkSocialAccount" use:enhance={enhanceSocialUnlink(platform.id)}>
               <input type="hidden" name="platform" value={platform.id} />
               <button type="submit" class="btn btn-danger-sm">Disconnect</button>
             </form>
@@ -329,7 +432,7 @@
 
       {#if linkingSocial === platform.id && !isLinked}
         <div class="link-form-wrap">
-          <form method="POST" action="?/linkSocialAccount" use:enhance class="link-form">
+          <form method="POST" action="?/linkSocialAccount" use:enhance={enhanceSocialLink(platform.id)} class="link-form">
             <input type="hidden" name="platform" value={platform.id} />
             <div class="field">
               <label for="social_id_{platform.id}">{platform.handleLabel}</label>
@@ -371,9 +474,9 @@
   </p>
 
   <!-- Existing share links -->
-  {#if shareTokens.length > 0}
+  {#if tokens.length > 0}
     <div class="share-token-list">
-      {#each shareTokens as st}
+      {#each tokens as st}
         <div class="share-token-item">
           <div class="share-token-meta">
             <span class="share-token-label">{st.label || 'Untitled link'}</span>
@@ -395,7 +498,7 @@
             >
               Copy link
             </button>
-            <form method="POST" action="?/revokeShareToken" use:enhance>
+            <form method="POST" action="?/revokeShareToken" use:enhance={enhanceRevokeToken(st.token)}>
               <input type="hidden" name="token" value={st.token} />
               <button type="submit" class="btn btn-danger-sm">Revoke</button>
             </form>
@@ -410,7 +513,7 @@
   <!-- Create new link -->
   {#if showCreateTokenForm}
     <div class="link-form-wrap" style="margin-top:16px">
-      <form method="POST" action="?/createShareToken" use:enhance class="link-form">
+      <form method="POST" action="?/createShareToken" use:enhance={enhanceCreateToken()} class="link-form">
         <div class="field">
           <label for="token_label">Label <span class="optional">(optional)</span></label>
           <input

@@ -1,12 +1,12 @@
 import { redirect } from '@sveltejs/kit';
 
 const PUBLIC_ROUTES = ['/login'];
+const API_BASE = process.env.API_BASE_URL ?? 'http://localhost:8000';
 
 /** @type {import('./$types').LayoutServerLoad} */
-export async function load({ url, cookies }) {
+export async function load({ url, cookies, fetch }) {
   const path = url.pathname;
 
-  // Allow login and any other public routes through without auth
   if (PUBLIC_ROUTES.some((r) => path.startsWith(r))) {
     return {};
   }
@@ -17,13 +17,18 @@ export async function load({ url, cookies }) {
     throw redirect(303, `/login?redirect=${encodeURIComponent(path)}`);
   }
 
-  // TODO: validate the token against GET /auth/me once the backend is live.
-  // For now we trust the cookie's presence as sufficient for development.
-  // const user = await getMe(token).catch(() => null);
-  // if (!user) {
-  //   cookies.delete('tiresias_token', { path: '/' });
-  //   throw redirect(303, '/login');
-  // }
+  // Validate the token and fetch the current user in one call.
+  const res = await fetch(`${API_BASE}/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
 
-  return { token };
+  if (!res.ok) {
+    // Token expired or invalid — clear the cookie and send to login.
+    cookies.delete('tiresias_token', { path: '/' });
+    throw redirect(303, `/login?redirect=${encodeURIComponent(path)}`);
+  }
+
+  const user = await res.json();
+  // token and user are available to all child pages via data.token / data.user
+  return { token, user };
 }

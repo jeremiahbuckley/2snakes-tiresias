@@ -19,10 +19,10 @@ export const actions = {
         secure: process.env.NODE_ENV === 'production',
       });
     } catch (err) {
-      if (err.status === 501) {
-        return fail(400, { error: 'Auth backend not yet active — use the mock data bypass.' });
+      if (err.status === 401) {
+        return fail(400, { error: 'Incorrect email or password.' });
       }
-      return fail(400, { error: 'Invalid credentials.' });
+      return fail(500, { error: 'Could not reach the API. Is the server running?' });
     }
 
     const redirectTo = url.searchParams.get('redirect') ?? '/dashboard';
