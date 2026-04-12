@@ -37,6 +37,9 @@ def normalise_fill(raw: dict[str, Any], user_id: str) -> dict[str, Any]:
 
     A fill is one execution of an order — the user bought or sold contracts
     in a market at a specific price. yes_price is in cents (0–100).
+
+    Currency: Kalshi is CFTC-regulated and denominated in USD.
+    Amounts are stored in cents; currency="USD" for scoring-engine conversion.
     """
     return {
         "external_id": raw.get("trade_id"),
@@ -47,6 +50,7 @@ def normalise_fill(raw: dict[str, Any], user_id: str) -> dict[str, Any]:
         "action": raw.get("action"),                  # "buy" | "sell"
         "count": raw.get("count"),                    # number of contracts
         "yes_price": raw.get("yes_price"),            # price paid in cents (0–100)
+        "currency": "USD",                            # Kalshi is USD-denominated
         "predicted_probability": _yes_probability(raw),
         "placed_at": _parse_ts(raw.get("created_time")),
         "raw": raw,
@@ -59,6 +63,9 @@ def normalise_settlement(raw: dict[str, Any], user_id: str) -> dict[str, Any]:
 
     A settlement is the final payout event when a market resolves.
     revenue is in cents.
+
+    Currency: USD. The scoring engine should divide revenue by 100 to get
+    dollars before cross-platform comparison.
     """
     return {
         "external_id": raw.get("market_result"),      # no unique ID; use composite key in data layer
@@ -67,6 +74,7 @@ def normalise_settlement(raw: dict[str, Any], user_id: str) -> dict[str, Any]:
         "market_external_id": raw.get("ticker"),
         "market_result": raw.get("market_result"),    # "yes" | "no"
         "revenue": raw.get("revenue"),                # payout in cents (can be negative)
+        "currency": "USD",                            # Kalshi is USD-denominated
         "settled_at": _parse_ts(raw.get("updated_time")),
         "raw": raw,
     }

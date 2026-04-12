@@ -131,6 +131,7 @@ def test_normalise_trade_fields():
     assert t["outcome"] == "Yes"
     assert t["size"] == 100.0
     assert t["price"] == 0.75
+    assert t["currency"] == "USDC"
 
 
 def test_normalise_trade_yes_probability():
@@ -167,6 +168,7 @@ def test_normalise_closed_position_fields():
     assert p["outcome"] == "Yes"
     assert p["avg_price"] == pytest.approx(0.72)
     assert p["realized_pnl"] == pytest.approx(280.0)
+    assert p["currency"] == "USDC"
 
 
 def test_normalise_closed_position_timestamp():

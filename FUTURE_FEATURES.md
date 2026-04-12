@@ -61,6 +61,29 @@ Polymarket auth is wallet-based rather than API-key-based. The auth-service need
 
 ---
 
+## Scoring Engine
+
+### Currency conversion for cross-platform financial amounts
+Each connector stores bet amounts in the platform's native denomination. The `currency` field records what that denomination is:
+
+| Platform   | Currency | Notes |
+|------------|----------|-------|
+| Kalshi     | USD      | Amounts stored in cents; divide by 100 for dollars |
+| Polymarket | USDC     | ERC-20 stablecoin; tracks USD 1:1 by design but has occasionally depegged |
+| Manifold   | MANA     | Play money — no real-world value; exclude from financial scoring |
+| Metaculus  | —        | No financial stakes |
+
+When a future connector adds a platform denominated in ETH or BTC (e.g. a crypto-native prediction market), the same pattern applies: store the amount and `currency` at ingest time, convert later.
+
+Things to think through:
+- The scoring engine should convert USDC, ETH, BTC, etc. to USD using the historical exchange rate at the `placed_at` timestamp, not the current rate. This matters for crypto-denominated bets placed years ago.
+- A good data source for historical rates: CoinGecko API (`/coins/{id}/history?date=DD-MM-YYYY`) or CryptoCompare. Rates should be cached in a `fx_rates` table (currency, date, usd_rate) to avoid repeated external calls during scoring runs.
+- MANA should be excluded from any financial scoring (P&L, ROI) since it has no real-world value. It can still be used for probability-based scoring (Brier score, calibration) since the bet amounts don't factor into those.
+- Kalshi amounts are in cents — the scoring engine should normalise to dollars (divide by 100) before any cross-platform comparison.
+- Consider storing a `amount_usd` cache column in the bets table, populated at scoring time and invalidated if the exchange rate source changes.
+
+---
+
 ## Scoring & Badges
 
 ### Badge catalogue expansion

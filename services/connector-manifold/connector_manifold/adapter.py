@@ -70,6 +70,7 @@ def normalise_bet(raw_bet: dict[str, Any], user_id: str) -> dict[str, Any]:
         "outcome": outcome,
         "amount": raw_bet.get("amount"),          # mana (positive = buy)
         "shares": raw_bet.get("shares"),
+        "currency": "MANA",                       # Manifold play-money; not convertible to USD
         "prob_before": prob_before,
         "prob_after": prob_after,
         "predicted_probability": predicted_probability,

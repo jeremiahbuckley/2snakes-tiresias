@@ -59,6 +59,10 @@ def normalise_trade(raw: dict[str, Any], user_id: str) -> dict[str, Any]:
 
     Each trade is one execution — the user bought or sold shares of a specific
     outcome token at a given price. Price is 0.0–1.0 (USDC per share).
+
+    Currency: Polymarket settles in USDC. USDC tracks USD 1:1 by design, but
+    the scoring engine should use the USDC/USD rate at placed_at for
+    correctness (it very rarely depegs, but it has happened).
     """
     return {
         "external_id": raw.get("transactionHash"),  # most stable unique ID
@@ -70,6 +74,7 @@ def normalise_trade(raw: dict[str, Any], user_id: str) -> dict[str, Any]:
         "outcome_index": raw.get("outcomeIndex"),
         "size": raw.get("size"),                # number of shares
         "price": raw.get("price"),              # 0.0–1.0
+        "currency": "USDC",                    # Polymarket is USDC-denominated
         "predicted_probability": _trade_probability(raw),
         "placed_at": _parse_unix_ts(raw.get("timestamp")),
         "slug": raw.get("slug"),                # retained for market lookup
@@ -84,6 +89,8 @@ def normalise_closed_position(raw: dict[str, Any], user_id: str) -> dict[str, An
     A closed position is the aggregate outcome for a user's entire position in
     a market after it resolves — equivalent to Kalshi's settlement record.
     realizedPnl is in USDC (can be negative).
+
+    Currency: USDC. The scoring engine converts to USD at settlement time.
     """
     return {
         "external_id": raw.get("conditionId"),   # one record per market per user
@@ -95,6 +102,7 @@ def normalise_closed_position(raw: dict[str, Any], user_id: str) -> dict[str, An
         "avg_price": raw.get("avgPrice"),         # average entry price (0.0–1.0)
         "total_bought": raw.get("totalBought"),   # total USDC spent
         "realized_pnl": raw.get("realizedPnl"),   # net profit/loss in USDC
+        "currency": "USDC",                       # Polymarket is USDC-denominated
         "closed_at": _parse_ts(raw.get("endDate")),
         "slug": raw.get("slug"),                  # retained for market lookup
         "raw": raw,

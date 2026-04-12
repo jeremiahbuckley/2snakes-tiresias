@@ -138,6 +138,7 @@ def test_normalise_bet_fields():
     assert b["market_external_id"] == "manifold-mkt-789"
     assert b["outcome"] == "YES"
     assert b["amount"] == pytest.approx(50.0)
+    assert b["currency"] == "MANA"
 
 
 def test_normalise_bet_yes_probability():

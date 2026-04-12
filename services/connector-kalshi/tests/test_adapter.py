@@ -82,6 +82,7 @@ def test_normalise_fill_fields():
     assert f["action"] == "buy"
     assert f["count"] == 10
     assert f["yes_price"] == 62
+    assert f["currency"] == "USD"
 
 
 def test_normalise_fill_missing_price():
@@ -106,6 +107,7 @@ def test_normalise_settlement_fields():
     assert s["user_external_id"] == "user-1"
     assert s["market_result"] == "no"
     assert s["revenue"] == -620
+    assert s["currency"] == "USD"
 
 
 def test_normalise_settlement_timestamp():
