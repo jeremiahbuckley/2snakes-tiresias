@@ -1,0 +1,211 @@
+historical
+GET
+Get Historical Cutoff Timestamps
+GET
+Get Historical Market Candlesticks
+GET
+Get Historical Fills
+GET
+Get Historical Orders
+GET
+Get Historical Trades
+GET
+Get Historical Markets
+GET
+Get Historical Market
+
+exchange
+GET
+Get Exchange Status
+GET
+Get Exchange Announcements
+GET
+Get Series Fee Changes
+GET
+Get Exchange Schedule
+GET
+Get User Data Timestamp
+
+orders
+GET
+Get Orders
+POST
+Create Order
+GET
+Get Order
+DEL
+Cancel Order
+POST
+Batch Create Orders
+DEL
+Batch Cancel Orders
+POST
+Amend Order
+POST
+Decrease Order
+GET
+Get Queue Positions for Orders
+GET
+Get Order Queue Position
+
+order-groups
+GET
+Get Order Groups
+POST
+Create Order Group
+GET
+Get Order Group
+DEL
+Delete Order Group
+PUT
+Reset Order Group
+PUT
+Trigger Order Group
+PUT
+Update Order Group Limit
+
+portfolio
+GET
+Get Balance
+POST
+Create Subaccount
+POST
+Transfer Between Subaccounts
+GET
+Get All Subaccount Balances
+GET
+Get Subaccount Transfers
+GET
+Get Subaccount Netting
+PUT
+Update Subaccount Netting
+GET
+Get Positions
+GET
+Get Settlements
+GET
+Get Total Resting Order Value
+GET
+Get Fills
+
+api-keys
+GET
+Get API Keys
+POST
+Create API Key
+POST
+Generate API Key
+DEL
+Delete API Key
+
+search
+GET
+Get Tags for Series Categories
+GET
+Get Filters for Sports
+
+account
+GET
+Get Account API Limits
+
+market
+GET
+Get Market Candlesticks
+GET
+Get Trades
+GET
+Get Market Orderbook
+GET
+Get Multiple Market Orderbooks
+GET
+Get Series
+GET
+Get Series List
+GET
+Get Markets
+GET
+Get Market
+GET
+Batch Get Market Candlesticks
+
+events
+GET
+Get Event Candlesticks
+GET
+Get Events
+GET
+Get Multivariate Events
+GET
+Get Event
+GET
+Get Event Metadata
+GET
+Get Event Forecast Percentile History
+
+live-data
+GET
+Get Live Data
+GET
+Get Live Data (with type)
+GET
+Get Multiple Live Data
+GET
+Get Game Stats
+
+incentive-programs
+GET
+Get Incentives
+
+fcm
+GET
+Get FCM Orders
+GET
+Get FCM Positions
+
+structured-targets
+GET
+Get Structured Targets
+GET
+Get Structured Target
+
+milestone
+GET
+Get Milestone
+GET
+Get Milestones
+
+communications
+GET
+Get Communications ID
+GET
+Get RFQs
+POST
+Create RFQ
+GET
+Get RFQ
+DEL
+Delete RFQ
+GET
+Get Quotes
+POST
+Create Quote
+GET
+Get Quote
+DEL
+Delete Quote
+PUT
+Accept Quote
+PUT
+Confirm Quote
+
+multivariate
+GET
+Get Multivariate Event Collection
+POST
+Create Market In Multivariate Event Collection
+GET
+Get Multivariate Event Collections
+GET
+Get Multivariate Event Collection Lookup History
+PUT
+Lookup Tickers For Market In Multivariate Event Collection

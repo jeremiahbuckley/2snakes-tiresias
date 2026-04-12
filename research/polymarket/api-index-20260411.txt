@@ -1,0 +1,235 @@
+Events
+GET
+List events (keyset pagination)
+GET
+List events
+GET
+Get event by id
+GET
+Get event by slug
+GET
+Get event tags
+
+Markets
+GET
+List markets (keyset pagination)
+GET
+List markets
+GET
+Get market by id
+GET
+Get market by slug
+GET
+Get market tags by id
+GET
+Get top holders for markets
+GET
+Get open interest
+GET
+Get live volume for an event
+
+Orderbook & Pricing
+GET
+Get order book
+POST
+Get order books (request body)
+GET
+Get market price
+GET
+Get market prices (query parameters)
+POST
+Get market prices (request body)
+GET
+Get midpoint price
+GET
+Get midpoint prices (query parameters)
+POST
+Get midpoint prices (request body)
+GET
+Get spread
+POST
+Get spreads
+GET
+Get last trade price
+GET
+Get last trade prices (query parameters)
+POST
+Get last trade prices (request body)
+GET
+Get prices history
+POST
+Get batch prices history
+GET
+Get fee rate
+GET
+Get fee rate by path parameter
+GET
+Get tick size
+GET
+Get tick size by path parameter
+GET
+Get server time
+
+Orders
+POST
+Post a new order
+DEL
+Cancel single order
+GET
+Get single order by ID
+POST
+Post multiple orders
+GET
+Get user orders
+DEL
+Cancel multiple orders
+DEL
+Cancel all orders
+DEL
+Cancel orders for a market
+GET
+Get order scoring status
+POST
+Send heartbeat
+
+Trades
+GET
+Get trades
+GET
+Get builder trades
+
+CLOB Markets
+GET
+Get simplified markets
+GET
+Get sampling markets
+GET
+Get sampling simplified markets
+
+Rebates
+GET
+Get current rebated fees for a maker
+
+Rewards
+GET
+Get current active rewards configurations
+GET
+Get raw rewards for a specific market
+GET
+Get multiple markets with rewards
+GET
+Get earnings for user by date
+GET
+Get total earnings for user by date
+GET
+Get reward percentages for user
+GET
+Get user earnings and markets configuration
+
+Profile
+GET
+Get public profile by wallet address
+GET
+Get current positions for a user
+GET
+Get closed positions for a user
+GET
+Get user activity
+GET
+Get total value of a user's positions
+GET
+Get trades for a user or markets
+GET
+Get total markets a user has traded
+GET
+Get positions for a market
+GET
+Download an accounting snapshot (ZIP of CSVs)
+
+Leaderboard
+GET
+Get trader leaderboard rankings
+
+Builders
+GET
+Get aggregated builder leaderboard
+GET
+Get daily builder volume time-series
+
+Search
+GET
+Search markets, events, and profiles
+
+Tags
+GET
+List tags
+GET
+Get tag by id
+GET
+Get tag by slug
+GET
+Get related tags (relationships) by tag id
+GET
+Get related tags (relationships) by tag slug
+GET
+Get tags related to a tag id
+GET
+Get tags related to a tag slug
+
+Series
+GET
+List series
+GET
+Get series by id
+
+Comments
+GET
+List comments
+GET
+Get comments by comment id
+GET
+Get comments by user address
+
+Sports
+GET
+Get sports metadata information
+GET
+Get valid sports market types
+GET
+List teams
+
+Bridge
+GET
+Get supported assets
+POST
+Create deposit addresses
+POST
+Get a quote
+GET
+Get transaction status
+POST
+Create withdrawal addresses
+
+Relayer
+POST
+Submit a transaction
+GET
+Get a transaction by ID
+GET
+Get recent transactions for a user
+GET
+Get current nonce for a user
+GET
+Get relayer address and nonce
+GET
+Check if a safe is deployed
+GET
+Get all relayer API keys
+
+WebSocket
+WSS
+Market Channel
+WSS
+User Channel
+WSS
+Sports Channel
