@@ -24,10 +24,10 @@ def create_app() -> FastAPI:
     )
 
     # Mount service routers
-    # TODO: import and include each service router as the services are implemented
-    # from auth_service.api import router as auth_router
+    from auth_service.api import router as auth_router
+    app.include_router(auth_router)
+    # TODO: mount additional routers as services are implemented:
     # from badge_service.api import router as badge_router
-    # app.include_router(auth_router)
     # app.include_router(badge_router)
 
     @app.get("/health")

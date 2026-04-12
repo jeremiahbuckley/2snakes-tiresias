@@ -258,11 +258,28 @@ export const mockBrierTimeline = [
 ];
 
 export const mockLinkedAccounts = {
-  kalshi: { linked: true, external_identifier: 'jeremiah_b_kalshi', linked_at: '2024-09-10T10:00:00Z' },
-  polymarket: { linked: true, external_identifier: '0xabc123...', linked_at: '2024-10-05T14:00:00Z' },
-  manifold: { linked: true, external_identifier: 'JeremiahB', linked_at: '2024-11-20T09:00:00Z' },
-  metaculus: { linked: false, external_identifier: null, linked_at: null },
+  kalshi: { linked: true, external_identifier: 'jeremiah_b_kalshi', linked_at: '2024-09-10T10:00:00Z', is_enabled: true, is_verified: true },
+  polymarket: { linked: true, external_identifier: '0xabc123...', linked_at: '2024-10-05T14:00:00Z', is_enabled: true, is_verified: true },
+  manifold: { linked: true, external_identifier: 'JeremiahB', linked_at: '2024-11-20T09:00:00Z', is_enabled: false, is_verified: true },
+  metaculus: { linked: false, external_identifier: null, linked_at: null, is_enabled: false, is_verified: false },
 };
+
+export const mockSocialAccounts = {
+  x: { linked: false, external_identifier: null, linked_at: null, is_enabled: false, is_verified: false },
+  bluesky: { linked: false, external_identifier: null, linked_at: null, is_enabled: false, is_verified: false },
+};
+
+export const mockShareTokens = [
+  {
+    token: 'aB3xQ7mR9nKp2wLvYtDcFs',
+    label: 'General audience',
+    show_scores: true,
+    show_badges: true,
+    show_predictions: false,
+    is_active: true,
+    created_at: '2026-03-01T10:00:00Z',
+  },
+];
 
 export const mockNotificationPrefs = {
   email_on_resolution: true,

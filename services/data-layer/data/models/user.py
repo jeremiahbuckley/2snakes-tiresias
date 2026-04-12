@@ -17,6 +17,9 @@ if TYPE_CHECKING:
     from .market import Market
     from .prediction import Prediction
     from .score import UserScore
+    from .linked_account import LinkedAccount
+    from .share_token import ShareToken
+    from .notification_preferences import NotificationPreferences
 
 
 class User(TimestampMixin, Base):
@@ -56,6 +59,15 @@ class User(TimestampMixin, Base):
     )
     score: Mapped[Optional["UserScore"]] = relationship(
         "UserScore", back_populates="user", uselist=False, lazy="selectin"
+    )
+    linked_accounts: Mapped[List["LinkedAccount"]] = relationship(
+        "LinkedAccount", back_populates="user", lazy="selectin"
+    )
+    share_tokens: Mapped[List["ShareToken"]] = relationship(
+        "ShareToken", back_populates="user", lazy="selectin"
+    )
+    notification_preferences: Mapped[Optional["NotificationPreferences"]] = relationship(
+        "NotificationPreferences", back_populates="user", uselist=False, lazy="selectin"
     )
 
     def __repr__(self) -> str:
