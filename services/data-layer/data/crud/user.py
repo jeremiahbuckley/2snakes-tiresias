@@ -4,7 +4,7 @@ CRUD operations for User.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Sequence
 from uuid import UUID
 
 from sqlalchemy import select
@@ -58,6 +58,28 @@ class UserCRUD(CRUDBase[User, UserCreate, UserUpdate]):
             select(User.id).where(User.username == username.lower())
         )
         return result.scalar_one_or_none() is not None
+
+    async def list_active(
+        self,
+        db: AsyncSession,
+        *,
+        skip: int = 0,
+        limit: int = 5000,
+    ) -> Sequence[User]:
+        """
+        Return all active (non-banned) users.
+
+        Called by the scheduler's sync_all_markets job to enumerate users
+        whose linked accounts should be synced.
+        """
+        result = await db.execute(
+            select(User)
+            .where(User.is_active.is_(True))
+            .offset(skip)
+            .limit(limit)
+            .order_by(User.created_at.asc())
+        )
+        return result.scalars().all()
 
     async def set_active(self, db: AsyncSession, user: User, active: bool) -> User:
         user.is_active = active

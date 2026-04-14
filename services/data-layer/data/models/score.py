@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, Numeric, func
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from data.database import Base, new_uuid
@@ -86,6 +86,16 @@ class UserScore(Base):
     )
     accuracy: Mapped[Optional[float]] = mapped_column(
         Numeric(precision=6, scale=5), nullable=True
+    )
+
+    # -------------------------------------------------------------------------
+    # Badge tracking
+    # -------------------------------------------------------------------------
+    badge_ids: Mapped[Optional[list]] = mapped_column(
+        JSONB,
+        nullable=True,
+        default=list,
+        doc="List of badge ID strings the user currently holds, e.g. ['first-prediction', 'above-baseline'].",
     )
 
     # -------------------------------------------------------------------------

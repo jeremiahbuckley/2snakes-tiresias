@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, Text
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -56,6 +56,21 @@ class Prediction(TimestampMixin, Base):
         ForeignKey("markets.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
+    )
+
+    # -------------------------------------------------------------------------
+    # External sync identifiers (NULL for manually-entered predictions)
+    # -------------------------------------------------------------------------
+    source: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        nullable=True,
+        index=True,
+        doc="Platform this prediction was imported from: 'kalshi' | 'manifold' | 'metaculus' | 'polymarket'.",
+    )
+    external_id: Mapped[Optional[str]] = mapped_column(
+        String(512),
+        nullable=True,
+        doc="The platform's own identifier for this bet/fill/forecast (trade ID, bet ID, etc.).",
     )
 
     # -------------------------------------------------------------------------

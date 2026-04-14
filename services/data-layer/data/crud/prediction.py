@@ -105,6 +105,70 @@ class PredictionCRUD(CRUDBase[Prediction, PredictionCreate, PredictionUpdate]):
         )
         return result.scalars().all()
 
+    # -------------------------------------------------------------------------
+    # Connector sync methods
+    # -------------------------------------------------------------------------
+
+    async def upsert_from_sync(
+        self,
+        db: AsyncSession,
+        *,
+        normalized: dict,
+        user_id: UUID,
+        market_id: UUID,
+    ) -> Optional["Prediction"]:
+        """
+        Create or update a prediction from a connector-normalized bet/fill/forecast dict.
+
+        The unique key is (user_id, market_id) — one prediction per user per market,
+        consistent with the existing constraint.
+
+        Rules:
+        - If no prediction exists for (user_id, market_id), create one.
+        - If a synced prediction already exists (source IS NOT NULL), update its
+          probability to reflect the latest bet (most recently synced wins).
+        - If a manually-entered prediction exists (source IS NULL), leave it
+          untouched so users' deliberate entries are never overwritten.
+        - If predicted_probability is None the record is skipped (returns None).
+
+        Returns the created/updated Prediction, or None if skipped.
+        """
+        probability = normalized.get("predicted_probability")
+        if probability is None:
+            return None
+
+        probability = round(float(probability), 5)
+        source = normalized.get("source")
+        external_id = normalized.get("external_id")
+
+        existing = await self.get_by_user_and_market(db, user_id=user_id, market_id=market_id)
+
+        if existing is not None:
+            if existing.source is None:
+                # Manual prediction — never overwrite
+                return existing
+            # Synced prediction — refresh probability and tracking fields
+            existing.probability = probability
+            existing.source = source
+            existing.external_id = external_id
+            db.add(existing)
+            await db.flush()
+            await db.refresh(existing)
+            return existing
+
+        # No existing prediction — create
+        prediction = Prediction(
+            user_id=user_id,
+            market_id=market_id,
+            probability=probability,
+            source=source,
+            external_id=external_id,
+        )
+        db.add(prediction)
+        await db.flush()
+        await db.refresh(prediction)
+        return prediction
+
     async def resolve_all_for_market(
         self,
         db: AsyncSession,

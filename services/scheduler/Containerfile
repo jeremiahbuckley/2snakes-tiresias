@@ -1,21 +1,24 @@
 # services/scheduler/Containerfile
 #
 # Runs the APScheduler background job process.
-# This container bundles the scheduler AND all connector packages, since
-# the scheduler imports them directly as Python libraries.
+# This container bundles the scheduler plus all dependent packages, since the
+# scheduler imports them directly as Python libraries rather than over HTTP.
 #
 # Jobs:
 #   - sync markets from all connectors       every 15 min
 #   - score newly resolved predictions       every 5 min
 #   - rebuild leaderboard snapshot           every hour
 #
+# Build context must be services/ (not services/scheduler/) so that sibling
+# service directories are accessible.
+#
 # Usage:
-#   podman build -t tiresias-scheduler .
+#   podman build -f scheduler/Containerfile -t tiresias-scheduler .
 #   podman run --rm \
 #     -e DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/tiresias \
-#     -e KALSHI_API_KEY=... \
-#     -e POLYMARKET_API_KEY=... \
-#     -e MANIFOLD_API_KEY=... \
+#     -e CREDENTIAL_ENCRYPTION_KEY=<fernet-key> \
+#     -e KALSHI_KEY_ID=... \
+#     -e KALSHI_PRIVATE_KEY_PATH=/secrets/kalshi.pem \
 #     -e METACULUS_TOKEN=... \
 #     tiresias-scheduler
 
@@ -23,12 +26,15 @@ FROM python:3.12-slim AS base
 
 WORKDIR /app
 
-# Install scheduler deps
-COPY scheduler/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# ---------------------------------------------------------------------------
+# Install Python dependencies
+# ---------------------------------------------------------------------------
 
-# Install connector deps (bundled with scheduler at runtime)
-# Note: build context must be services/ (not services/scheduler/)
+# Scheduler core deps
+COPY scheduler/requirements.txt ./requirements-scheduler.txt
+RUN pip install --no-cache-dir -r requirements-scheduler.txt
+
+# Connector deps
 COPY connector-kalshi/requirements.txt     ./requirements-kalshi.txt
 COPY connector-polymarket/requirements.txt ./requirements-polymarket.txt
 COPY connector-manifold/requirements.txt   ./requirements-manifold.txt
@@ -39,20 +45,56 @@ RUN pip install --no-cache-dir \
     -r requirements-manifold.txt \
     -r requirements-metaculus.txt
 
-# Copy all source packages
+# Data layer, scoring engine, badge service, notification service deps
+COPY data-layer/requirements.txt        ./requirements-data.txt
+COPY scoring-engine/requirements.txt    ./requirements-scoring.txt
+COPY badge-service/requirements.txt     ./requirements-badge.txt
+COPY notification-service/requirements.txt ./requirements-notification.txt
+RUN pip install --no-cache-dir \
+    -r requirements-data.txt \
+    -r requirements-scoring.txt \
+    -r requirements-badge.txt \
+    -r requirements-notification.txt
+
+# ---------------------------------------------------------------------------
+# Copy source packages
+# ---------------------------------------------------------------------------
+
+# Scheduler itself
 COPY scheduler/scheduler/ ./scheduler/
+
+# Connectors
 COPY connector-kalshi/connector_kalshi/         ./connector_kalshi/
 COPY connector-polymarket/connector_polymarket/ ./connector_polymarket/
 COPY connector-manifold/connector_manifold/     ./connector_manifold/
 COPY connector-metaculus/connector_metaculus/   ./connector_metaculus/
 
+# Data layer
+COPY data-layer/data/ ./data/
+
+# Scoring engine
+COPY scoring-engine/scoring_engine/ ./scoring_engine/
+
+# Badge service
+COPY badge-service/badge_service/ ./badge_service/
+
+# Notification service
+COPY notification-service/notification_service/ ./notification_service/
+
+# ---------------------------------------------------------------------------
+# Runtime configuration
+# ---------------------------------------------------------------------------
+
 RUN adduser --disabled-password --gecos "" appuser
 USER appuser
 
+# Required env vars — set via podman/k8s secrets, not here
 ENV DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/tiresias
-ENV KALSHI_API_KEY=""
-ENV POLYMARKET_API_KEY=""
-ENV MANIFOLD_API_KEY=""
+ENV CREDENTIAL_ENCRYPTION_KEY=""
+# Kalshi RSA signing
+ENV KALSHI_KEY_ID=""
+ENV KALSHI_PRIVATE_KEY_PATH=""
+# Metaculus (global fallback if per-user token decryption is unavailable)
 ENV METACULUS_TOKEN=""
 
 CMD ["python", "-m", "scheduler.runner"]

@@ -1,0 +1,23 @@
+# Gitleaks configuration for Tiresias
+# Docs: https://github.com/gitleaks/gitleaks
+
+title = "Tiresias gitleaks config"
+
+[extend]
+# Use the default ruleset as a base
+useDefault = true
+
+[allowlist]
+description = "Global allowlist"
+paths = [
+    # Test fixtures and example files are allowed to contain placeholder values
+    '''.env.example''',
+    '''tests/''',
+    # Node modules are never scanned
+    '''node_modules/''',
+]
+regexes = [
+    # Placeholder values used in .env.example and docs
+    '''replace-me''',
+    '''your-.*-here''',
+]

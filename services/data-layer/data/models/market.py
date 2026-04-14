@@ -8,7 +8,7 @@ import enum
 from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -28,6 +28,18 @@ class MarketOutcome(str, enum.Enum):
 
 class Market(TimestampMixin, Base):
     __tablename__ = "markets"
+    __table_args__ = (
+        # Partial unique index: prevents duplicate imports from the same platform.
+        # Only enforced when both columns are non-NULL (manually-created markets
+        # have source=NULL and are not affected).
+        Index(
+            "uq_market_source_external",
+            "source",
+            "external_id",
+            unique=True,
+            postgresql_where=text("source IS NOT NULL AND external_id IS NOT NULL"),
+        ),
+    )
 
     # -------------------------------------------------------------------------
     # Identity
@@ -42,6 +54,21 @@ class Market(TimestampMixin, Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
+    )
+
+    # -------------------------------------------------------------------------
+    # External sync identifiers
+    # -------------------------------------------------------------------------
+    source: Mapped[Optional[str]] = mapped_column(
+        String(32),
+        nullable=True,
+        index=True,
+        doc="Platform this market was imported from: 'kalshi' | 'manifold' | 'metaculus' | 'polymarket'. NULL for manually-created markets.",
+    )
+    external_id: Mapped[Optional[str]] = mapped_column(
+        String(512),
+        nullable=True,
+        doc="The platform's own identifier for this market (ticker, contract ID, slug, etc.).",
     )
 
     # -------------------------------------------------------------------------

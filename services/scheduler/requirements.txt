@@ -1,3 +1,12 @@
 apscheduler>=3.10.4
+
+# Database (shared with data-layer)
+sqlalchemy[asyncio]>=2.0.30
+asyncpg>=0.29.0
+
+# Credential decryption (Fernet symmetric encryption)
+cryptography>=42.0.0
+
+# Testing
 pytest>=8.2.0
 pytest-asyncio>=0.23.6
