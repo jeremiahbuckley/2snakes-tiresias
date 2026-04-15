@@ -1,0 +1,55 @@
+# this directory holds the API documentation, if you include it in claude's context, it will hit the token usage limit very quickly
+research/
+
+# Build outputs & compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env/
+
+# Secrets and credentials
+.env
+.env.local
+.env.*
+*.pem
+*.key
+*.p12
+credentials.json
+secrets.yaml
+secrets.yml
+
+# Data files
+data/
+*.csv
+*.parquet
+*.sqlite
+*.db
+
+# Logs and caches
+*.log
+logs/
+.cache/
+.tmp/
+tmp/
+
+# Test coverage
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
+
+# IDE and OS noise
+.DS_Store
+.idea/
+.vscode/
+Thumbs.db
