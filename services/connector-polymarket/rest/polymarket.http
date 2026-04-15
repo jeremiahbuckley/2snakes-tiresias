@@ -1,0 +1,99 @@
+# Polymarket REST API — Manual Test Requests
+# -------------------------------------------
+# Requires: VS Code REST Client extension (Huachao Mao)
+#
+# No authentication required — Gamma and Data APIs are fully public.
+# All requests are HTTP GET with query parameters only.
+#
+# Docs:
+#   Gamma API: https://gamma-api.polymarket.com
+#   Data API:  https://data-api.polymarket.com
+#   CLOB API:  https://clob.polymarket.com (not implemented in codebase)
+
+@gammaBase = https://gamma-api.polymarket.com
+@dataBase  = https://data-api.polymarket.com
+@wallet    = 0xFf087b904c694BdC4F2710940E4BeEDDAD7Efccc
+
+# ============================================================
+# DATA API — User trades & positions
+# ============================================================
+
+### Get Trades — all trades for the wallet
+# side: BUY | SELL
+# takerOnly: true (default) — only taker-side fills
+GET {{dataBase}}/trades?user={{wallet}}&limit=100&offset=0
+Accept: application/json
+
+###
+
+### Get Trades — BUY side only
+GET {{dataBase}}/trades?user={{wallet}}&side=BUY&limit=100&offset=0
+Accept: application/json
+
+###
+
+### Get Trades — SELL side only
+GET {{dataBase}}/trades?user={{wallet}}&side=SELL&limit=100&offset=0
+Accept: application/json
+
+###
+
+### Get Open Positions
+# sortBy: CURRENT | INITIAL | TOKENS | CASHPNL | PERCENTPNL | TITLE | PRICE | AVGPRICE
+GET {{dataBase}}/positions?user={{wallet}}&limit=100&offset=0&sortBy=CASHPNL&sortDirection=DESC
+Accept: application/json
+
+###
+
+### Get Closed Positions — sorted by realized P&L descending
+# sortBy: REALIZEDPNL | TITLE | PRICE | AVGPRICE | TIMESTAMP
+GET {{dataBase}}/closed-positions?user={{wallet}}&limit=50&offset=0&sortBy=REALIZEDPNL&sortDirection=DESC
+Accept: application/json
+
+###
+
+### Get Closed Positions — sorted by most recent
+GET {{dataBase}}/closed-positions?user={{wallet}}&limit=50&offset=0&sortBy=TIMESTAMP&sortDirection=DESC
+Accept: application/json
+
+###
+
+# ============================================================
+# GAMMA API — Market metadata
+# ============================================================
+
+### Get Market by Slug — with tags embedded
+# Replace the slug with one from a trade/position response above
+@slug = will-there-be-a-us-government-shutdown-by-december-20-2024
+
+GET {{gammaBase}}/markets?slug={{slug}}&include_tag=true
+Accept: application/json
+
+###
+
+### Get Market by Slug — without tags
+GET {{gammaBase}}/markets?slug={{slug}}
+Accept: application/json
+
+###
+
+### Get Market by Integer ID
+# Replace 123456 with a real market ID
+@marketId = 123456
+
+GET {{gammaBase}}/markets/{{marketId}}?include_tag=true
+Accept: application/json
+
+###
+
+### Browse Markets — active markets, ordered by volume
+GET {{gammaBase}}/markets?active=true&closed=false&order=volume&ascending=false&limit=20
+Accept: application/json
+
+###
+
+### Browse Markets — recently closed
+GET {{gammaBase}}/markets?active=false&closed=true&order=endDate&ascending=false&limit=20
+Accept: application/json
+
+###

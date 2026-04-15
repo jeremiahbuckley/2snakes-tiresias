@@ -1,0 +1,101 @@
+# Kalshi REST API — Manual Test Requests
+# ----------------------------------------
+# Requires: VS Code REST Client extension (Huachao Mao)
+#
+# BEFORE RUNNING:
+#   1. Set KALSHI_KEY_ID and KALSHI_PRIVATE_KEY_PATH in connector-kalshi/.env
+#   2. Run:  python rest/gen_kalshi_auth.py
+#      This signs each request and writes auth headers to rest/.env
+#   3. Send any request below (click "Send Request" above each ### block)
+#
+# Why the helper script? Kalshi uses RSA-PSS-SHA256 request signing — each
+# request must include a fresh timestamp + RSA signature. VS Code REST Client
+# can't compute these natively, so gen_kalshi_auth.py pre-computes them.
+# Signatures will expire after ~30 seconds; re-run the script as needed.
+#
+# Docs: https://trading-api.kalshi.com/trade-api/v2/swagger-ui/
+
+@baseUrl = {{$dotenv KALSHI_API_BASE}}
+@keyId   = {{$dotenv KALSHI_KEY_ID}}
+
+# ============================================================
+# MARKETS
+# ============================================================
+
+### Get Markets — list all available markets
+# Returns up to the default page size of markets.
+# Optionally add query params: ?limit=10&cursor=<token>&status=open&series_ticker=PRES
+GET {{baseUrl}}/markets
+KALSHI-ACCESS-KEY: {{keyId}}
+KALSHI-ACCESS-TIMESTAMP: {{$dotenv KALSHI_TS_MARKETS}}
+KALSHI-ACCESS-SIGNATURE: {{$dotenv KALSHI_SIG_MARKETS}}
+Accept: application/json
+
+###
+
+### Get Markets — filtered by status (open markets only)
+GET {{baseUrl}}/markets?status=open&limit=20
+KALSHI-ACCESS-KEY: {{keyId}}
+KALSHI-ACCESS-TIMESTAMP: {{$dotenv KALSHI_TS_MARKETS}}
+KALSHI-ACCESS-SIGNATURE: {{$dotenv KALSHI_SIG_MARKETS}}
+Accept: application/json
+
+###
+
+### Get Single Market — by ticker
+# Replace TICKER below with a real ticker, e.g. INXD-23DEC31-B4000
+@ticker = TICKER
+
+GET {{baseUrl}}/markets/{{ticker}}
+KALSHI-ACCESS-KEY: {{keyId}}
+KALSHI-ACCESS-TIMESTAMP: {{$dotenv KALSHI_TS_MARKET}}
+KALSHI-ACCESS-SIGNATURE: {{$dotenv KALSHI_SIG_MARKET}}
+Accept: application/json
+
+###
+
+# ============================================================
+# PORTFOLIO — authenticated user endpoints
+# ============================================================
+
+### Get Fills — bet execution history
+# Each fill = one contract bought or sold.
+# Fields: trade_id, ticker, side (yes/no), action (buy/sell),
+#         count, yes_price (cents 0-100), created_time
+GET {{baseUrl}}/portfolio/fills
+KALSHI-ACCESS-KEY: {{keyId}}
+KALSHI-ACCESS-TIMESTAMP: {{$dotenv KALSHI_TS_FILLS}}
+KALSHI-ACCESS-SIGNATURE: {{$dotenv KALSHI_SIG_FILLS}}
+Accept: application/json
+
+###
+
+### Get Fills — with pagination limit
+GET {{baseUrl}}/portfolio/fills?limit=50
+KALSHI-ACCESS-KEY: {{keyId}}
+KALSHI-ACCESS-TIMESTAMP: {{$dotenv KALSHI_TS_FILLS}}
+KALSHI-ACCESS-SIGNATURE: {{$dotenv KALSHI_SIG_FILLS}}
+Accept: application/json
+
+###
+
+### Get Settlements — resolved market payouts
+# Each settlement = one resolved market the user held a position in.
+# Fields: ticker, market_result (yes/no), revenue (cents, can be negative),
+#         updated_time
+GET {{baseUrl}}/portfolio/settlements
+KALSHI-ACCESS-KEY: {{keyId}}
+KALSHI-ACCESS-TIMESTAMP: {{$dotenv KALSHI_TS_SETTLEMENTS}}
+KALSHI-ACCESS-SIGNATURE: {{$dotenv KALSHI_SIG_SETTLEMENTS}}
+Accept: application/json
+
+###
+
+### Get Settlements — with pagination limit
+GET {{baseUrl}}/portfolio/settlements?limit=50
+KALSHI-ACCESS-KEY: {{keyId}}
+KALSHI-ACCESS-TIMESTAMP: {{$dotenv KALSHI_TS_SETTLEMENTS}}
+KALSHI-ACCESS-SIGNATURE: {{$dotenv KALSHI_SIG_SETTLEMENTS}}
+Accept: application/json
+
+###

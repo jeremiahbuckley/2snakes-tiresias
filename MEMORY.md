@@ -152,3 +152,27 @@ Note: use `127.0.0.1` not `localhost`, and `?ssl=disable` — required due to Po
 3. **Implement auth service credential verifiers** (`verify_kalshi_credential` etc. all raise `NotImplementedError`)
 4. **Integration tests** — wire up `tests/integration/` with a real test DB
 5. **Public leaderboard + public profile** frontend apps
+
+---
+
+## Kalshi API Migration (openapi-20260415.yaml) — DONE 2026-04-15
+
+`client.py` and `adapter.py` updated and all 26 tests passing. Changes applied:
+- Base URL: `trading-api.kalshi.com` → `api.elections.kalshi.com`
+- Fills: `count`/`yes_price` (int cents) → `count_fp`/`yes_price_dollars` (fixed-point strings); `fill_id` now primary ID over `trade_id`; old fields kept as fallbacks
+- Settlements: `updated_time` → `settled_time`; `market_result` now handles `scalar` and `void` in addition to `yes`/`no`
+- Markets: `expiration_time` → `latest_expiration_time`; `title` falls back to `yes_sub_title`/`no_sub_title`
+- Pagination cursor now available on all three list endpoints (TODOs still open in client.py)
+
+---
+
+## REST Test Files (created 2026-04-15)
+
+- `services/connector-kalshi/rest/kalshi.http` — VS Code REST Client requests for all 4 Kalshi endpoints
+- `services/connector-kalshi/rest/gen_kalshi_auth.py` — generates RSA-PSS-SHA256 auth headers into `rest/.env`; run before each test session from `services/connector-kalshi/`
+- `services/connector-kalshi/rest/http-client.env.json` — production/demo environment switcher
+- `services/connector-polymarket/rest/polymarket.http` — VS Code REST Client requests for Polymarket (no auth needed)
+
+Kalshi test workflow: fill `KALSHI_KEY_ID` and `KALSHI_PRIVATE_KEY_PATH` in root `.env`, then `python rest/gen_kalshi_auth.py`
+
+Polymarket test workflow: open `polymarket.http`, click Send Request. Wallet: `0xFf087b904c694BdC4F2710940E4BeEDDAD7Efccc`
