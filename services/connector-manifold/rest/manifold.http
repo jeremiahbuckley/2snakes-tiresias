@@ -1,0 +1,226 @@
+# Manifold Markets REST API — Manual Test Requests
+# --------------------------------------------------
+# Requires: VS Code REST Client extension (Huachao Mao)
+#
+# Auth: set MANIFOLD_API_KEY in the root .env file.
+# Format: "Key <token>" — NOT Bearer.
+# Most GET endpoints work without auth; auth gives access to private markets.
+#
+# NOTE: API domain moved from manifold.markets/api to api.manifold.markets.
+#       The codebase default is already correct.
+#
+# Docs: https://docs.manifold.markets/api
+
+@baseUrl  = https://api.manifold.markets/v0
+@apiKey   = {{$dotenv MANIFOLD_API_KEY}}
+@username = jeremiahbuckley
+
+# ============================================================
+# USER — run these first to get your userId, needed for market filters
+# ============================================================
+
+### Get authenticated user — confirms your API key works, returns your userId
+GET {{baseUrl}}/me
+Authorization: Key {{apiKey}}
+Accept: application/json
+
+###
+
+### Get user by username — public, no auth needed
+GET {{baseUrl}}/user/{{username}}
+Accept: application/json
+
+###
+
+# ============================================================
+# MARKETS — list and browse
+# ============================================================
+
+### Browse markets — most recent, no auth
+# Valid sort values: created-time (default), updated-time, last-bet-time, last-comment-time
+# Valid order values: asc, desc (default)
+GET {{baseUrl}}/markets?limit=20&sort=created-time&order=desc
+Accept: application/json
+
+###
+
+### Browse markets — filter by creator userId
+# Get your userId from GET /me above, then paste it here
+@userId = YOUR_USER_ID_HERE
+
+GET {{baseUrl}}/markets?userId={{userId}}&limit=20
+Authorization: Key {{apiKey}}
+Accept: application/json
+
+###
+
+### Browse markets — filter by groupId (topic)
+# Get a groupId from GET /group/[slug] below, then paste it here
+@groupId = YOUR_GROUP_ID_HERE
+
+
+GET {{baseUrl}}/markets?groupId={{groupId}}&limit=20
+Accept: application/json
+
+###
+
+### Search markets — filter by topic slug (the right way to filter by topic)
+# topicSlug is the slug from the group/topic URL, e.g. "us-politics", "ai"
+# filter values: all (default), open, closed, resolved, news, closing-week, closing-month
+GET {{baseUrl}}/search-markets?topicSlug=us-politics&filter=open&contractType=BINARY&limit=20
+Accept: application/json
+
+###
+
+### Search markets — filter by creator (using creatorId, not username)
+# Get creatorId (= userId) from GET /user/[username] above
+GET {{baseUrl}}/search-markets?creatorId={{userId}}&sort=newest&limit=20
+Authorization: Key {{apiKey}}
+Accept: application/json
+
+###
+
+### Search markets — full-text search with filters
+GET {{baseUrl}}/search-markets?term=2026+election&sort=most-popular&filter=open&contractType=BINARY&limit=20
+Accept: application/json
+
+###
+
+# ============================================================
+# SINGLE MARKET
+# ============================================================
+
+### Get market by ID — includes answers for multi-choice markets
+@marketId = YOUR_MARKET_ID_HERE
+
+GET {{baseUrl}}/market/{{marketId}}
+Accept: application/json
+
+###
+
+### Get market by slug — slug is the URL path after the username
+@marketSlug = will-there-be-a-us-recession-in-2026
+
+
+GET {{baseUrl}}/slug/{{marketSlug}}
+Accept: application/json
+
+###
+
+### Get current probability for a market
+GET {{baseUrl}}/market/{{marketId}}/prob
+Accept: application/json
+
+###
+
+# ============================================================
+# TOPICS (groups)
+# ============================================================
+
+### Get topic by slug — use this to find a groupId for market filtering
+@topicSlug = us-politics
+
+GET {{baseUrl}}/group/{{topicSlug}}
+Accept: application/json
+
+###
+
+# ============================================================
+# BETS (user trade history)
+# ============================================================
+#
+# KNOWN LIMITATION: bets return a contractId, but there is no
+# GET /v0/contract/[id] endpoint. For binary markets, contractId == marketId
+# so GET /v0/market/[contractId] works directly. For multi-choice markets,
+# contractId is an answer-level contract ID, not the top-level market ID,
+# so that lookup will fail.
+#
+# Two workarounds:
+#
+#   Option A — Direct lookup (binary markets only):
+#     Take the contractId from a bet and call GET /v0/market/[contractId].
+#     Works for YES/NO markets. Fails for multi-choice answer bets.
+#
+#   Option B — Bulk scan (all market types):
+#     1. Call GET /v0/markets (paginate with &before=) to fetch all markets.
+#     2. Each market has an id and, for multi-choice, answers with their own ids.
+#     3. Build a map: contractId → market.
+#     4. Join bets to markets using that map.
+#
+#   Option C — Positions instead of raw bets (recommended for market context):
+#     GET /v0/get-user-contract-metrics-with-contracts returns your aggregate
+#     positions AND the full market objects in one response. No join needed.
+#     Use this when you want to see which markets you've bet on, not the
+#     individual trade-by-trade history.
+
+### Get bets — all bets, most recent first
+# Each bet: id, contractId, amount, outcome, probBefore, probAfter, createdTime
+GET {{baseUrl}}/bets?username={{username}}&limit=100
+Authorization: Key {{apiKey}}
+Accept: application/json
+
+###
+
+### Get bets — paginate using before=<bet_id> from previous response
+GET {{baseUrl}}/bets?username={{username}}&limit=100&before=LAST_BET_ID
+Authorization: Key {{apiKey}}
+Accept: application/json
+
+###
+
+### Get bets for a specific market (once you have the contractId/marketId)
+GET {{baseUrl}}/bets?username={{username}}&contractId={{marketId}}&limit=100
+Authorization: Key {{apiKey}}
+Accept: application/json
+
+###
+
+### Option A — look up a market directly by contractId (binary markets only)
+# Paste a contractId from the bets response above
+@contractId = PASTE_CONTRACT_ID_FROM_BET_HERE
+
+GET {{baseUrl}}/market/{{contractId}}
+Accept: application/json
+
+###
+
+### Option B — fetch all markets for bulk matching (page 1)
+# Note the id of the last market in the response, then use it as &before= below
+GET {{baseUrl}}/markets?limit=1000&sort=created-time&order=desc
+Accept: application/json
+
+###
+
+### Option B — fetch all markets (next page)
+# Paste the id of the last market from the previous response
+GET {{baseUrl}}/markets?limit=1000&sort=created-time&order=desc&before=LAST_MARKET_ID
+Accept: application/json
+
+###
+
+# ============================================================
+# PORTFOLIO (Option C — positions with market context included)
+# ============================================================
+
+### Get user portfolio metrics — live balance, profit, invested value
+GET {{baseUrl}}/get-user-portfolio?userId={{userId}}
+Accept: application/json
+
+###
+
+### Get positions with full market objects — best way to see market context
+# Returns { metricsByContract: { contractId: [ContractMetric] }, contracts: [market] }
+# No join required — market data is embedded alongside your position metrics.
+# userId and limit are both required. order: lastBetTime (default) or profit
+GET {{baseUrl}}/get-user-contract-metrics-with-contracts?userId={{userId}}&limit=50&order=profit
+Authorization: Key {{apiKey}}
+Accept: application/json
+
+###
+
+### Get positions — next page
+GET {{baseUrl}}/get-user-contract-metrics-with-contracts?userId={{userId}}&limit=50&order=profit&offset=50
+Authorization: Key {{apiKey}}
+Accept: application/json
+
+###

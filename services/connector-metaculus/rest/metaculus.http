@@ -1,0 +1,81 @@
+# Metaculus REST API — Manual Test Requests
+# -------------------------------------------
+# Requires: VS Code REST Client extension (Huachao Mao)
+#
+# Auth: set METACULUS_TOKEN in the root .env file.
+# Format: "Token <token>" (not Bearer, not Key).
+# Required on all endpoints — public GET requests work without it but
+# authenticated requests include your own forecast data (my_forecasts).
+#
+# To find your Metaculus integer user ID, send the "Get current user"
+# request below first — the id field in the response is what the
+# connector uses as forecaster_id.
+#
+# Docs: https://www.metaculus.com/api/
+
+@baseUrl = https://www.metaculus.com
+@token   = {{$dotenv METACULUS_TOKEN}}
+
+# Your Metaculus integer user ID — get this from /api/users/me/ below
+@forecasterId = YOUR_INTEGER_USER_ID
+
+# ============================================================
+# USERS
+# ============================================================
+
+### Get current authenticated user — run this first to find your forecaster_id
+GET {{baseUrl}}/api/users/me/
+Authorization: Token {{token}}
+Content-Type: application/json
+Accept: application/json
+
+###
+
+# ============================================================
+# POSTS (questions + forecasts)
+# ============================================================
+
+### Get posts where you have made a forecast — first page
+# Returns: { "results": [...], "next": "url | null" }
+# Each result includes the question object with your my_forecasts embedded.
+GET {{baseUrl}}/api/posts/?forecaster_id={{forecasterId}}&limit=20
+Authorization: Token {{token}}
+Content-Type: application/json
+Accept: application/json
+
+###
+
+### Get posts — filter to resolved binary questions only
+GET {{baseUrl}}/api/posts/?forecaster_id={{forecasterId}}&statuses=resolved&forecast_type=binary&limit=20
+Authorization: Token {{token}}
+Content-Type: application/json
+Accept: application/json
+
+###
+
+### Get posts — second page (paste the "next" URL from the previous response)
+# Replace the full URL below with the value of "next" from the previous response
+GET {{baseUrl}}/api/posts/?forecaster_id={{forecasterId}}&limit=20&offset=20
+Authorization: Token {{token}}
+Content-Type: application/json
+Accept: application/json
+
+###
+
+### Get single post by ID
+# Replace with a real post ID from a /api/posts/ response above
+@postId = 12345
+
+GET {{baseUrl}}/api/posts/{{postId}}/
+Authorization: Token {{token}}
+Content-Type: application/json
+Accept: application/json
+
+###
+
+### Get single post — unauthenticated (no my_forecasts in response)
+GET {{baseUrl}}/api/posts/{{postId}}/
+Content-Type: application/json
+Accept: application/json
+
+###

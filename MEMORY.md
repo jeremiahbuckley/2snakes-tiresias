@@ -166,6 +166,20 @@ Note: use `127.0.0.1` not `localhost`, and `?ssl=disable` — required due to Po
 
 ---
 
+## Manifold — Multi-Choice Market Bug (V2)
+
+`services/connector-manifold/connector_manifold/sync.py` has a latent bug for multi-choice markets. No changes needed for V1 (binary only), but document here for V2.
+
+**The problem:** `sync_market(market_external_id)` passes the bet's `contractId` to `GET /v0/market/{id}`. For binary markets `contractId == marketId` so this works. For multi-choice markets, a bet's `contractId` is an answer-level contract ID, not the top-level market ID — the lookup 404s.
+
+**Root cause:** Manifold has a one-to-many relationship between markets and contracts (each answer in a multi-choice market is its own contract). Bets reference the answer-level `contractId`. There is no `GET /v0/contract/{id}` endpoint to resolve an answer contract back to its parent market.
+
+**V1 status:** Not a problem — `normalise_bet` only handles `"YES"`/`"NO"` outcomes and the scoring engine uses binary Brier scores. Multi-choice bets would produce wrong probability values regardless, so the full fix belongs in V2.
+
+**V2 fix approach:** When `get_market(contractId)` returns a 404, fall back to `GET /v0/markets` (paginated bulk scan), build a map of `answerId → parentMarket`, and resolve from there. Alternatively, `GET /v0/get-user-contract-metrics-with-contracts` returns positions and full market objects together in one call — consider replacing the bet+market sync pattern with this endpoint for Manifold.
+
+---
+
 ## REST Test Files (created 2026-04-15)
 
 - `services/connector-kalshi/rest/kalshi.http` — VS Code REST Client requests for all 4 Kalshi endpoints
