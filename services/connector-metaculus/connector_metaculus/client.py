@@ -20,13 +20,19 @@ Rate limits: not documented explicitly; ~60 req/min is a safe default.
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
 import httpx
 
+logger = logging.getLogger(__name__)
+
 METACULUS_API_BASE = os.environ.get("METACULUS_API_BASE", "https://www.metaculus.com")
 METACULUS_TOKEN = os.environ.get("METACULUS_TOKEN", "")
+
+# Page size for list requests. Metaculus allows up to 100.
+_PAGE_LIMIT = 100
 
 
 class MetaculusClient:
@@ -44,24 +50,61 @@ class MetaculusClient:
     async def get_user_posts(
         self, metaculus_user_id: int, **params: Any
     ) -> list[dict]:
-        """Return all posts where the given user has submitted a forecast.
+        """Return ALL posts where the given user has submitted a forecast.
 
-        Metaculus uses offset/limit pagination. The response envelope contains
-        `results` (current page) and `next` (URL of next page, or null).
-        TODO: auto-paginate using the `next` link (see FUTURE_FEATURES.md).
+        Auto-paginates using the `next` URL returned in each response envelope
+        until there are no more pages. The response envelope contains:
+            results  — current page of Post objects
+            next     — absolute URL of the next page, or null when done
+            count    — total number of matching posts across all pages
+
+        Each returned Post's embedded question object includes `my_forecasts`
+        (the authenticated user's full forecast history for that question)
+        when the token owner is querying their own forecaster_id.
 
         Args:
             metaculus_user_id: Integer user ID on Metaculus (not username).
             **params: Additional query params forwarded to the API
                       (e.g. statuses=["resolved"], forecast_type=["binary"]).
         """
+        all_results: list[dict] = []
+
         async with httpx.AsyncClient(headers=self._headers) as client:
+            # First request — include forecaster_id and any extra params
             resp = await client.get(
                 f"{self._base}/api/posts/",
-                params={"forecaster_id": metaculus_user_id, **params},
+                params={"forecaster_id": metaculus_user_id, "limit": _PAGE_LIMIT, **params},
             )
             resp.raise_for_status()
-            return resp.json().get("results", [])
+            body = resp.json()
+            all_results.extend(body.get("results", []))
+
+            total = body.get("count", 0)
+            logger.debug(
+                "Metaculus get_user_posts: fetched page 1, %d/%d posts",
+                len(all_results),
+                total,
+            )
+
+            # Follow `next` links until exhausted
+            next_url: str | None = body.get("next")
+            page = 2
+            while next_url:
+                resp = await client.get(next_url)
+                resp.raise_for_status()
+                body = resp.json()
+                page_results = body.get("results", [])
+                all_results.extend(page_results)
+                logger.debug(
+                    "Metaculus get_user_posts: fetched page %d, %d/%d posts",
+                    page,
+                    len(all_results),
+                    total,
+                )
+                next_url = body.get("next")
+                page += 1
+
+        return all_results
 
     async def get_post(self, post_id: int) -> dict:
         """Return full post details including the embedded question.

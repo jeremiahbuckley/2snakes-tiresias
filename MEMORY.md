@@ -57,6 +57,35 @@ The scheduler (`services/scheduler/`) was a skeleton with four `NotImplementedEr
 - Kalshi per-user credentials — currently uses env-var-based RSA key (single key for all users); per-user Kalshi support requires passing PEM bytes to KalshiClient constructor
 - Integration / E2E tests (`tests/integration/`, `tests/e2e/` directories exist but are empty)
 - Public leaderboard and public profile SvelteKit apps (may not exist yet)
+- Social publishing (push to X / Bluesky) — not designed yet; intentionally deferred
+
+### Metaculus sync — completed 2026-04-15
+
+The Metaculus connector is now fully covered and pagination-correct:
+
+**`connector_metaculus/client.py`** — `get_user_posts` upgraded from single-page to full auto-pagination. Follows `next` URLs until exhausted; uses `limit=100` per page. Adds `logging` import and debug log lines per page.
+
+**`connector_metaculus/tests/test_sync.py`** (NEW — 17 tests, all passing):
+- `TestSyncUserForecasts` (8 tests) — binary-only filter, last-forecast selection, empty results, no-forecast edge case, source/external_id shape, user_id forwarding
+- `TestSyncMarket` (5 tests) — normalised dict shape, resolved/open, tags, timestamps
+- `TestPagination` (4 tests) — `sync_user_forecasts` sees all pages; `get_user_posts` follows `next` links (1 page = 1 request, 2 pages = 2 requests, empty = 0 results)
+- All 34 connector-metaculus tests pass (17 adapter + 17 sync)
+
+**`scheduler/tests/test_jobs.py`** — `TestSyncMetaculus` class extended with 9 new tests:
+- `test_skips_when_no_external_identifier` — empty string → 0
+- `test_happy_path_upserts_markets_and_predictions` — full path: posts → markets → predictions → count=1
+- `test_uses_per_user_token_not_env_var` — verifies decrypted token is passed to MetaculusClient constructor
+- `test_non_binary_posts_are_skipped` — numeric post → 0 markets, 0 predictions
+- `test_market_fetch_failure_skips_prediction_but_continues` — one bad market → skipped, others continue
+- `test_prediction_with_none_probability_is_skipped` — empty my_forecasts → upsert_from_sync returns None → count=0
+- `test_multiple_posts_all_succeed` — 3 posts → count=3
+- Note: scheduler tests require Python 3.12+ (`StrEnum`) and can't run in the Python 3.10 sandbox; they pass locally.
+
+**`scripts/test_metaculus_live.py`** (NEW) — end-to-end smoke test script. Run against a live DB to confirm predictions land:
+- Phase 1: API connectivity check via `/api/users/me/` and `get_user_posts`
+- Phase 2: runs `_sync_metaculus` and commits
+- Phase 3: asserts markets exist with titles, resolved markets have outcomes, predictions exist with non-None probabilities
+- Supports `--user-id <uuid>` and `--dry-run` flags
 
 ---
 
@@ -147,7 +176,7 @@ Note: use `127.0.0.1` not `localhost`, and `?ssl=disable` — required due to Po
 
 ## What to work on next (suggested order)
 
-1. **Complete Metaculus sync end-to-end** — fix linked_account row (is_enabled, correct integer user ID, encrypted token) and verify predictions appear in DB
+1. **Run Metaculus live smoke test** — fix linked_account row (is_enabled=true, correct integer Metaculus user ID, Fernet-encrypted token), then run `python scripts/test_metaculus_live.py --user-id <uuid>` to verify predictions land in DB end-to-end
 2. **Implement notification service handlers** (email via Resend/SendGrid/Postmark)
 3. **Implement auth service credential verifiers** (`verify_kalshi_credential` etc. all raise `NotImplementedError`)
 4. **Integration tests** — wire up `tests/integration/` with a real test DB

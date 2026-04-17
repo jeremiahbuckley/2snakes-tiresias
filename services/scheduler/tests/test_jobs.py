@@ -662,3 +662,377 @@ class TestSyncMetaculus:
             result = await _sync_metaculus(db, acct)
 
         assert result == 0
+
+    @pytest.mark.asyncio
+    async def test_skips_when_no_external_identifier(self):
+        acct = make_linked_account(
+            platform="metaculus",
+            external_identifier="",
+            credential="encrypted",
+        )
+        db = AsyncMock()
+
+        with patch("scheduler.sync.decrypt_credential", return_value="valid-token"):
+            from scheduler.sync import _sync_metaculus
+            result = await _sync_metaculus(db, acct)
+
+        assert result == 0
+
+    @pytest.mark.asyncio
+    async def test_happy_path_upserts_markets_and_predictions(self):
+        """Full path: posts fetched → markets upserted → predictions upserted → count returned."""
+        user_id = make_uuid()
+        acct = make_linked_account(
+            platform="metaculus",
+            external_identifier="98765",
+            credential="encrypted-token",
+            user_id=user_id,
+        )
+        db = AsyncMock()
+
+        binary_post = {
+            "id": 201,
+            "title": "Will fusion power be commercially viable before 2035?",
+            "resolved": False,
+            "categories": [{"id": 1, "name": "Science", "slug": "science", "description": ""}],
+            "question": {
+                "id": 301,
+                "type": "binary",
+                "status": "open",
+                "resolution": None,
+                "actual_close_time": None,
+                "scheduled_close_time": "2034-12-31T23:59:59Z",
+                "actual_resolve_time": None,
+                "scheduled_resolve_time": "2035-06-01T00:00:00Z",
+                "my_forecasts": [
+                    {"probability_yes": 0.20, "start_time": "2025-02-01T00:00:00Z", "end_time": None},
+                ],
+            },
+        }
+
+        market_id = make_uuid()
+        mock_market = make_market(market_id=market_id, source="metaculus", external_id="201")
+        mock_pred = make_prediction(user_id=user_id, market_id=market_id, source="metaculus")
+
+        with (
+            patch("scheduler.sync.decrypt_credential", return_value="raw-token"),
+            patch(
+                "connector_metaculus.client.MetaculusClient.get_user_posts",
+                new_callable=AsyncMock,
+                return_value=[binary_post],
+            ),
+            patch(
+                "connector_metaculus.client.MetaculusClient.get_post",
+                new_callable=AsyncMock,
+                return_value=binary_post,
+            ),
+            patch(
+                "data.crud.market.MarketCRUD.upsert_from_sync",
+                new_callable=AsyncMock,
+                return_value=mock_market,
+            ) as mock_market_upsert,
+            patch(
+                "data.crud.prediction.PredictionCRUD.upsert_from_sync",
+                new_callable=AsyncMock,
+                return_value=mock_pred,
+            ) as mock_pred_upsert,
+        ):
+            from scheduler.sync import _sync_metaculus
+            count = await _sync_metaculus(db, acct)
+
+        assert count == 1
+        mock_market_upsert.assert_called_once()
+        mock_pred_upsert.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_uses_per_user_token_not_env_var(self):
+        """The decrypted token is passed directly to MetaculusClient, not via env var."""
+        user_id = make_uuid()
+        acct = make_linked_account(
+            platform="metaculus",
+            external_identifier="55555",
+            credential="fernet-ciphertext",
+            user_id=user_id,
+        )
+        db = AsyncMock()
+
+        captured_token = []
+
+        def capture_client_init(self, token):
+            captured_token.append(token)
+            self._base = "https://www.metaculus.com"
+            self._headers = {"Authorization": f"Token {token}"}
+
+        with (
+            patch("scheduler.sync.decrypt_credential", return_value="decrypted-secret"),
+            patch("connector_metaculus.client.MetaculusClient.__init__", capture_client_init),
+            patch(
+                "connector_metaculus.client.MetaculusClient.get_user_posts",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+        ):
+            from scheduler.sync import _sync_metaculus
+            await _sync_metaculus(db, acct)
+
+        assert captured_token == ["decrypted-secret"]
+
+    @pytest.mark.asyncio
+    async def test_non_binary_posts_are_skipped(self):
+        """Posts with numeric/multiple_choice questions produce no predictions."""
+        user_id = make_uuid()
+        acct = make_linked_account(
+            platform="metaculus",
+            external_identifier="77777",
+            credential="enc",
+            user_id=user_id,
+        )
+        db = AsyncMock()
+
+        numeric_post = {
+            "id": 501,
+            "title": "What temperature in 2030?",
+            "resolved": False,
+            "categories": [],
+            "question": {
+                "id": 601,
+                "type": "numeric",
+                "status": "open",
+                "resolution": None,
+                "my_forecasts": [
+                    {"probability_yes": None, "start_time": "2025-01-01T00:00:00Z", "end_time": None},
+                ],
+            },
+        }
+
+        with (
+            patch("scheduler.sync.decrypt_credential", return_value="tok"),
+            patch(
+                "connector_metaculus.client.MetaculusClient.get_user_posts",
+                new_callable=AsyncMock,
+                return_value=[numeric_post],
+            ),
+            patch(
+                "data.crud.market.MarketCRUD.upsert_from_sync",
+                new_callable=AsyncMock,
+            ) as mock_market_upsert,
+            patch(
+                "data.crud.prediction.PredictionCRUD.upsert_from_sync",
+                new_callable=AsyncMock,
+            ) as mock_pred_upsert,
+        ):
+            from scheduler.sync import _sync_metaculus
+            count = await _sync_metaculus(db, acct)
+
+        assert count == 0
+        mock_market_upsert.assert_not_called()
+        mock_pred_upsert.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_market_fetch_failure_skips_prediction_but_continues(self):
+        """If get_post raises for a market, that market+prediction is skipped but sync continues."""
+        user_id = make_uuid()
+        acct = make_linked_account(
+            platform="metaculus",
+            external_identifier="22222",
+            credential="enc",
+            user_id=user_id,
+        )
+        db = AsyncMock()
+
+        post_a = {
+            "id": 301,
+            "title": "Post A",
+            "resolved": False,
+            "categories": [],
+            "question": {
+                "id": 401,
+                "type": "binary",
+                "status": "open",
+                "resolution": None,
+                "actual_close_time": None,
+                "scheduled_close_time": "2027-01-01T00:00:00Z",
+                "my_forecasts": [{"probability_yes": 0.4, "start_time": "2025-01-01T00:00:00Z", "end_time": None}],
+            },
+        }
+        post_b = {
+            "id": 302,
+            "title": "Post B",
+            "resolved": False,
+            "categories": [],
+            "question": {
+                "id": 402,
+                "type": "binary",
+                "status": "open",
+                "resolution": None,
+                "actual_close_time": None,
+                "scheduled_close_time": "2027-06-01T00:00:00Z",
+                "my_forecasts": [{"probability_yes": 0.7, "start_time": "2025-01-01T00:00:00Z", "end_time": None}],
+            },
+        }
+
+        market_id_b = make_uuid()
+        mock_market_b = make_market(market_id=market_id_b, source="metaculus", external_id="302")
+        mock_pred_b = make_prediction(user_id=user_id, market_id=market_id_b, source="metaculus")
+
+        async def get_post_side_effect(post_id):
+            if post_id == 301:
+                raise Exception("HTTP 404 — post not found")
+            return post_b
+
+        with (
+            patch("scheduler.sync.decrypt_credential", return_value="tok"),
+            patch(
+                "connector_metaculus.client.MetaculusClient.get_user_posts",
+                new_callable=AsyncMock,
+                return_value=[post_a, post_b],
+            ),
+            patch(
+                "connector_metaculus.client.MetaculusClient.get_post",
+                new_callable=AsyncMock,
+                side_effect=get_post_side_effect,
+            ),
+            patch(
+                "data.crud.market.MarketCRUD.upsert_from_sync",
+                new_callable=AsyncMock,
+                return_value=mock_market_b,
+            ) as mock_market_upsert,
+            patch(
+                "data.crud.prediction.PredictionCRUD.upsert_from_sync",
+                new_callable=AsyncMock,
+                return_value=mock_pred_b,
+            ) as mock_pred_upsert,
+        ):
+            from scheduler.sync import _sync_metaculus
+            count = await _sync_metaculus(db, acct)
+
+        # post_a market fetch failed → skipped; post_b succeeded → 1 prediction
+        assert count == 1
+        mock_market_upsert.assert_called_once()
+        mock_pred_upsert.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_prediction_with_none_probability_is_skipped(self):
+        """A forecast with no probability (empty my_forecasts) produces count=0."""
+        user_id = make_uuid()
+        acct = make_linked_account(
+            platform="metaculus",
+            external_identifier="33333",
+            credential="enc",
+            user_id=user_id,
+        )
+        db = AsyncMock()
+
+        post_no_forecast = {
+            "id": 401,
+            "title": "Some question",
+            "resolved": False,
+            "categories": [],
+            "question": {
+                "id": 501,
+                "type": "binary",
+                "status": "open",
+                "resolution": None,
+                "actual_close_time": None,
+                "scheduled_close_time": "2027-01-01T00:00:00Z",
+                "my_forecasts": [],  # empty → probability_yes=None → upsert skipped
+            },
+        }
+
+        market_id = make_uuid()
+        mock_market = make_market(market_id=market_id, source="metaculus", external_id="401")
+
+        with (
+            patch("scheduler.sync.decrypt_credential", return_value="tok"),
+            patch(
+                "connector_metaculus.client.MetaculusClient.get_user_posts",
+                new_callable=AsyncMock,
+                return_value=[post_no_forecast],
+            ),
+            patch(
+                "connector_metaculus.client.MetaculusClient.get_post",
+                new_callable=AsyncMock,
+                return_value=post_no_forecast,
+            ),
+            patch(
+                "data.crud.market.MarketCRUD.upsert_from_sync",
+                new_callable=AsyncMock,
+                return_value=mock_market,
+            ),
+            patch(
+                "data.crud.prediction.PredictionCRUD.upsert_from_sync",
+                new_callable=AsyncMock,
+                return_value=None,  # upsert_from_sync returns None when probability is None
+            ) as mock_pred_upsert,
+        ):
+            from scheduler.sync import _sync_metaculus
+            count = await _sync_metaculus(db, acct)
+
+        assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_multiple_posts_all_succeed(self):
+        """Three binary posts → three markets upserted, three predictions returned."""
+        user_id = make_uuid()
+        acct = make_linked_account(
+            platform="metaculus",
+            external_identifier="44444",
+            credential="enc",
+            user_id=user_id,
+        )
+        db = AsyncMock()
+
+        def make_post(post_id: int, prob: float) -> dict:
+            return {
+                "id": post_id,
+                "title": f"Post {post_id}",
+                "resolved": False,
+                "categories": [],
+                "question": {
+                    "id": post_id + 10000,
+                    "type": "binary",
+                    "status": "open",
+                    "resolution": None,
+                    "actual_close_time": None,
+                    "scheduled_close_time": "2027-01-01T00:00:00Z",
+                    "my_forecasts": [
+                        {"probability_yes": prob, "start_time": "2025-01-01T00:00:00Z", "end_time": None}
+                    ],
+                },
+            }
+
+        posts = [make_post(1001, 0.3), make_post(1002, 0.5), make_post(1003, 0.8)]
+
+        def make_mock_market(post_id):
+            return make_market(source="metaculus", external_id=str(post_id))
+
+        def make_mock_pred():
+            return make_prediction(user_id=user_id, source="metaculus")
+
+        with (
+            patch("scheduler.sync.decrypt_credential", return_value="tok"),
+            patch(
+                "connector_metaculus.client.MetaculusClient.get_user_posts",
+                new_callable=AsyncMock,
+                return_value=posts,
+            ),
+            patch(
+                "connector_metaculus.client.MetaculusClient.get_post",
+                new_callable=AsyncMock,
+                side_effect=lambda pid: posts[[p["id"] for p in posts].index(pid)],
+            ),
+            patch(
+                "data.crud.market.MarketCRUD.upsert_from_sync",
+                new_callable=AsyncMock,
+                side_effect=lambda db, normalized: make_mock_market(int(normalized["external_id"])),
+            ),
+            patch(
+                "data.crud.prediction.PredictionCRUD.upsert_from_sync",
+                new_callable=AsyncMock,
+                return_value=make_mock_pred(),
+            ),
+        ):
+            from scheduler.sync import _sync_metaculus
+            count = await _sync_metaculus(db, acct)
+
+        assert count == 3
