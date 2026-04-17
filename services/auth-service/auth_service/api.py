@@ -21,6 +21,8 @@ Share-token endpoints (anonymous sharing):
 Notification-preference endpoint:
   GET    /auth/me/notifications          — get email notification prefs
   PATCH  /auth/me/notifications          — update email notification prefs
+  GET    /auth/notifications/unsubscribe — RFC 8058 one-click unsubscribe
+  POST   /auth/notifications/unsubscribe — one-click POST (same token logic)
 """
 
 from __future__ import annotations
@@ -576,3 +578,105 @@ async def resolve_share_token(token_slug: str, db: DB) -> dict:
         }
 
     return payload
+
+
+# ---------------------------------------------------------------------------
+# Public unsubscribe endpoint (RFC 8058 one-click)
+# ---------------------------------------------------------------------------
+
+# We depend on notification_service only for the token decoder; no handler
+# or provider code is imported. If the package is not on the path at
+# runtime, the endpoint still returns a friendly error instead of 500.
+try:
+    from notification_service.unsubscribe import decode_token as _decode_unsub_token
+    _UNSUB_AVAILABLE = True
+except Exception:  # pragma: no cover — defensive import guard
+    _decode_unsub_token = None  # type: ignore[assignment]
+    _UNSUB_AVAILABLE = False
+
+
+_VALID_PREF_FIELDS = {
+    "email_on_resolution",
+    "email_on_badge",
+    "email_on_rank_change",
+}
+
+
+async def _apply_unsubscribe(db: AsyncSession, token: str) -> NotificationPrefsOut:
+    """
+    Decode an unsubscribe token, flip the referenced preference to False,
+    and return the resulting prefs. Raises HTTPException(400) on invalid
+    or expired tokens.
+    """
+    if not _UNSUB_AVAILABLE or _decode_unsub_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unsubscribe service is not configured",
+        )
+
+    try:
+        claims = _decode_unsub_token(token)
+    except Exception as exc:  # jwt.InvalidTokenError + subclasses
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid or expired unsubscribe token: {exc}",
+        )
+
+    pref_field: str = claims["pref"]
+    if pref_field not in _VALID_PREF_FIELDS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown preference field: {pref_field}",
+        )
+
+    try:
+        user_uuid = uuid.UUID(claims["sub"])
+    except (KeyError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token is missing or has an invalid user id",
+        )
+
+    result = await db.execute(
+        select(NotificationPreferences).where(
+            NotificationPreferences.user_id == user_uuid
+        )
+    )
+    prefs = result.scalar_one_or_none()
+    if prefs is None:
+        # Create the row on demand — matches behaviour of GET /auth/me/notifications.
+        prefs = NotificationPreferences(user_id=user_uuid)
+        db.add(prefs)
+        await db.flush()
+
+    setattr(prefs, pref_field, False)
+    await db.commit()
+    await db.refresh(prefs)
+
+    return NotificationPrefsOut(
+        email_on_resolution=prefs.email_on_resolution,
+        email_on_badge=prefs.email_on_badge,
+        email_on_rank_change=prefs.email_on_rank_change,
+    )
+
+
+@router.get("/notifications/unsubscribe", response_model=NotificationPrefsOut)
+async def unsubscribe_get(token: str, db: DB) -> NotificationPrefsOut:
+    """
+    Unsubscribe a user from a category of transactional email.
+
+    Called by the link in the List-Unsubscribe footer of outbound emails.
+    The token is a JWT signed by notification-service identifying the
+    user and which preference flag to flip to False.
+    """
+    return await _apply_unsubscribe(db, token)
+
+
+@router.post("/notifications/unsubscribe", response_model=NotificationPrefsOut)
+async def unsubscribe_post(token: str, db: DB) -> NotificationPrefsOut:
+    """
+    RFC 8058 one-click unsubscribe. Triggered by MUAs (Gmail, Yahoo) that
+    POST to the List-Unsubscribe URL when the user clicks the native
+    "Unsubscribe" button in their inbox. Same behaviour as the GET.
+    """
+    return await _apply_unsubscribe(db, token)

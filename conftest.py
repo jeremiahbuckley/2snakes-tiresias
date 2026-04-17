@@ -1,5 +1,18 @@
+import enum
 import sys
 from pathlib import Path
+
+# Test-only polyfill: the codebase targets Python 3.12 (StrEnum is stdlib
+# there), but CI and some developer environments may still run 3.10. Inject
+# a minimal StrEnum so that `from enum import StrEnum` resolves during test
+# collection. This is a no-op on 3.11+.
+if not hasattr(enum, "StrEnum"):
+
+    class StrEnum(str, enum.Enum):  # type: ignore[no-redef]
+        def __str__(self) -> str:
+            return self.value
+
+    enum.StrEnum = StrEnum  # type: ignore[attr-defined]
 
 root = Path(__file__).parent
 

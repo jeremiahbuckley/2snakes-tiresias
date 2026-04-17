@@ -1,0 +1,13 @@
+{% extends "base.txt" %}
+{% block content %}
+Hi {{ display_name }},
+
+You just cracked {{ milestone_label }} on the Tiresias leaderboard.
+
+  Rank: #{{ new_rank }} out of {{ total_users }} forecasters
+{% if previous_rank %}
+  Previously: #{{ previous_rank }}
+{% endif %}
+
+View the leaderboard: {{ app_url }}/leaderboard
+{% endblock %}

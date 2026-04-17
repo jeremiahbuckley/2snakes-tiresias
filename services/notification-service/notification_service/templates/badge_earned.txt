@@ -1,0 +1,11 @@
+{% extends "base.txt" %}
+{% block content %}
+Hi {{ display_name }},
+
+Congratulations — you just earned a new badge!
+
+  {{ badge_name }}
+  {{ badge_description }}
+
+Share your profile: {{ app_url }}/u/{{ username }}
+{% endblock %}

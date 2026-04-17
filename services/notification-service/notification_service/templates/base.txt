@@ -1,0 +1,8 @@
+Tiresias
+
+{% block content %}{% endblock %}
+
+--
+You're receiving this because you opted in to email notifications on Tiresias.
+Unsubscribe: {{ unsubscribe_url }}
+Manage preferences: {{ app_url }}/settings/notifications

@@ -465,6 +465,9 @@ class TestRebuildLeaderboard:
                   new_callable=AsyncMock, return_value=users),
             patch("scheduler.jobs.ScoreCRUD.rebuild_for_user",
                   new_callable=AsyncMock) as mock_rebuild,
+            # Snapshot before/after the rebuild — nothing to notify on
+            patch("scheduler.jobs.ScoreCRUD.leaderboard",
+                  new_callable=AsyncMock, return_value=[]),
         ):
             from scheduler.jobs import rebuild_leaderboard
             await rebuild_leaderboard()
@@ -493,6 +496,8 @@ class TestRebuildLeaderboard:
                   new_callable=AsyncMock, return_value=users),
             patch("scheduler.jobs.ScoreCRUD.rebuild_for_user",
                   side_effect=failing_rebuild),
+            patch("scheduler.jobs.ScoreCRUD.leaderboard",
+                  new_callable=AsyncMock, return_value=[]),
         ):
             from scheduler.jobs import rebuild_leaderboard
             await rebuild_leaderboard()  # should not raise

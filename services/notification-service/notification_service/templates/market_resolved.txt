@@ -1,0 +1,22 @@
+{% extends "base.txt" %}
+{% block content %}
+Hi {{ display_name }},
+
+{% if resolutions|length == 1 -%}
+{%- set r = resolutions[0] -%}
+A market you predicted on has resolved.
+
+  {{ r.market_title }}
+  Outcome: {{ r.outcome|upper }}
+  Your Brier score: {{ "%.4f"|format(r.brier_score) }}
+{%- else -%}
+{{ resolutions|length }} markets you predicted on have resolved:
+
+{% for r in resolutions %}
+  - {{ r.market_title }}
+    Resolved {{ r.outcome|upper }} · Brier {{ "%.4f"|format(r.brier_score) }}
+{% endfor %}
+{%- endif %}
+
+View your dashboard: {{ app_url }}/dashboard
+{% endblock %}
