@@ -16,14 +16,20 @@
       name: 'Kalshi',
       color: '#00b894',
       description: 'US-regulated prediction market',
-      credentialLabel: 'API Key',
-      credentialPlaceholder: 'Your Kalshi API key',
+      identifierLabel: 'Kalshi Key ID',
+      identifierPlaceholder: 'e.g. 12345678-1234-1234-1234-1234567890ab',
+      credentialLabel: 'RSA Private Key (PEM)',
+      credentialPlaceholder: '-----BEGIN PRIVATE KEY-----\nMIIEv…\n-----END PRIVATE KEY-----',
+      credentialHint: 'Generate a key pair at kalshi.com/account/profile and paste the contents of the downloaded .pem file here. Kalshi does not store your private key — keep a copy somewhere safe.',
+      credentialIsMultiline: true,
     },
     {
       id: 'polymarket',
       name: 'Polymarket',
       color: '#6c5ce7',
       description: 'Crypto-based prediction market',
+      identifierLabel: 'Wallet Address',
+      identifierPlaceholder: '0x…',
       credentialLabel: 'Wallet / API Key',
       credentialPlaceholder: '0x…',
     },
@@ -32,6 +38,8 @@
       name: 'Manifold',
       color: '#e17055',
       description: 'Play-money prediction market',
+      identifierLabel: 'Manifold Username',
+      identifierPlaceholder: 'Your Manifold username',
       credentialLabel: 'API Key',
       credentialPlaceholder: 'Your Manifold API key',
     },
@@ -40,6 +48,8 @@
       name: 'Metaculus',
       color: '#0984e3',
       description: 'Forecasting community',
+      identifierLabel: 'Metaculus User ID',
+      identifierPlaceholder: 'Your numeric Metaculus user ID',
       credentialLabel: 'API Token',
       credentialPlaceholder: 'Your Metaculus API token',
     },
@@ -344,24 +354,39 @@
           <form method="POST" action="?/linkMarketAccount" use:enhance={enhanceMarketLink(platform.id)} class="link-form">
             <input type="hidden" name="platform" value={platform.id} />
             <div class="field">
-              <label for="market_id_{platform.id}">Username / Identifier</label>
+              <label for="market_id_{platform.id}">{platform.identifierLabel ?? 'Username / Identifier'}</label>
               <input
                 id="market_id_{platform.id}"
                 name="identifier"
                 type="text"
-                placeholder="Your {platform.name} username"
+                placeholder={platform.identifierPlaceholder ?? `Your ${platform.name} username`}
                 required
               />
             </div>
             <div class="field">
               <label for="market_cred_{platform.id}">{platform.credentialLabel}</label>
-              <input
-                id="market_cred_{platform.id}"
-                name="credential"
-                type="password"
-                placeholder={platform.credentialPlaceholder}
-                required
-              />
+              {#if platform.credentialIsMultiline}
+                <textarea
+                  id="market_cred_{platform.id}"
+                  name="credential"
+                  rows="8"
+                  placeholder={platform.credentialPlaceholder}
+                  spellcheck="false"
+                  autocomplete="off"
+                  required
+                ></textarea>
+              {:else}
+                <input
+                  id="market_cred_{platform.id}"
+                  name="credential"
+                  type="password"
+                  placeholder={platform.credentialPlaceholder}
+                  required
+                />
+              {/if}
+              {#if platform.credentialHint}
+                <span class="field-hint">{platform.credentialHint}</span>
+              {/if}
             </div>
             <button type="submit" class="btn btn-primary">Link account</button>
           </form>

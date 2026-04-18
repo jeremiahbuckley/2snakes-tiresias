@@ -38,6 +38,20 @@ The REST connector handles point-in-time syncs. A WebSocket client (`ws_client.p
 
 ---
 
+## User Dashboard
+
+### Refresh data button
+The user dashboard should expose a "Refresh data" button that triggers the scheduler's on-demand `sync_user_predictions(user_id)` job for the signed-in user, so they can pull their latest predictions without waiting for the next scheduled `sync_all_markets` tick (currently every 15 min).
+
+Things to think through:
+- Surface: add a button near the last-synced timestamp on the dashboard header. Show a spinner + "Syncing…" state while the job runs and a toast (success/error) when it returns.
+- API: either a new `POST /auth/me/sync` that enqueues the scheduler job, or expose scheduler's on-demand job via a thin API endpoint (e.g. `POST /scheduler/sync-user/{user_id}` gated to the authenticated user only). The scheduler already implements `sync_user_predictions` — this is mostly a plumbing task.
+- Rate-limit client-side (disable button for ~30s after click) and server-side (reject if the user has triggered a sync within the last N seconds) to avoid hammering the upstream platforms. This also ties into the Kalshi rate-limit work tracked above.
+- Consider whether a sync should be fire-and-forget (return 202 immediately, UI polls for last-synced timestamp) or awaited (return 200 once the sync finishes). Fire-and-forget is friendlier if any single platform is slow.
+- Errors per-platform should be surfaced gracefully — if Manifold fails but Kalshi succeeds, the UI should show partial success rather than "sync failed".
+
+---
+
 ## Go-to-Market
 
 ### Per-user platform opt-in / opt-out

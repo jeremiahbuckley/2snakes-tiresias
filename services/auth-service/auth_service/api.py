@@ -44,7 +44,7 @@ from data.models.share_token import ShareToken, generate_token
 from data.models.user import User
 
 from .jwt import create_access_token, decode_access_token
-from .linked_accounts import Platform  # re-export for pydantic validators
+from .linked_accounts import Platform, verify_upsert_credential  # re-export for pydantic validators
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 bearer = HTTPBearer()
@@ -329,9 +329,47 @@ async def upsert_linked_account(
     Credentials are accepted in plaintext and must be encrypted before
     being persisted.  TODO: integrate Fernet encryption here.
 
-    Verification against the external platform API is attempted but
-    failures are non-fatal during development (is_verified stays False).
+    The credential is verified against the platform's API (Kalshi, Manifold,
+    Metaculus) before being stored. If the platform definitively rejects the
+    credential → 400. If verification can't complete (network, 5xx, upstream
+    outage) → the credential is stored with ``is_verified=False`` so the user
+    isn't blocked by temporary upstream issues; sync will re-verify later.
+
+    Polymarket, X, and Bluesky currently skip verification (see
+    ``linked_accounts.VERIFICATION_SKIPPED``).
     """
+    # --- Verify before persisting ------------------------------------------
+    # `None`  → skipped (Polymarket, social stubs)
+    # `True`  → verified
+    # `False` → platform rejected the credential → 400
+    # raise   → network/unexpected → treat as unverified, still store
+    try:
+        verification = await verify_upsert_credential(
+            platform, body.external_identifier, body.credential
+        )
+    except ValueError as exc:
+        # Malformed input (empty PEM, unparseable key, etc.) — caller error.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid credential for {platform.value}: {exc}",
+        )
+    except Exception:  # httpx.HTTPError and anything else unexpected
+        # Platform unreachable or returned 5xx. Don't block the user; store
+        # with is_verified=False and let sync re-verify.
+        verification = None
+
+    if verification is False:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"{platform.value} rejected the provided credentials. "
+                "Please double-check and try again."
+            ),
+        )
+
+    is_verified_now = verification is True
+
+    # --- Persist -----------------------------------------------------------
     result = await db.execute(
         select(LinkedAccount).where(
             LinkedAccount.user_id == current_user.id,
@@ -351,13 +389,14 @@ async def upsert_linked_account(
             external_identifier=body.external_identifier,
             credential_encrypted=encrypted_credential,
             is_enabled=body.is_enabled,
+            is_verified=is_verified_now,
         )
         db.add(account)
     else:
         account.external_identifier = body.external_identifier
         account.credential_encrypted = encrypted_credential
         account.is_enabled = body.is_enabled
-        account.is_verified = False  # re-verify after credential change
+        account.is_verified = is_verified_now
 
     await db.commit()
     await db.refresh(account)

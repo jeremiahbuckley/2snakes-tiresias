@@ -33,7 +33,17 @@ DELETE /auth/link/{platform} # unlink platform
 ## Credential Encryption
 - All external API keys/tokens encrypted with Fernet (`CREDENTIAL_ENCRYPTION_KEY` env var) before DB storage
 - `linked_accounts.py` handles encrypt-on-store, decrypt-on-read
-- **Note**: Credential verifiers (actually calling platform APIs to validate keys) are stubs — not yet implemented
+
+## Credential Verification
+- `linked_accounts.py` exposes async per-platform verifiers that make a lightweight authenticated call to confirm a credential before we trust it
+- Market platforms implemented: Kalshi (RSA-PSS signed GET /portfolio/fills), Polymarket (EIP-191 signature recovery, no HTTP), Manifold (GET /v0/me), Metaculus (GET /api/users/me/)
+- Social platforms (X, Bluesky) still raise `NotImplementedError` — deferred, see `FUTURE_FEATURES.md`
+- Contract: verifiers return `False` for credential-rejection responses (401/403/signature mismatch), raise `ValueError`/`httpx.HTTPError` for caller errors and network failures
+- `upsert_linked_account` calls `verify_upsert_credential` (dispatcher in `linked_accounts.py`). Policy:
+  - verifier returns True  → `is_verified=True`, 200
+  - verifier returns False → HTTPException 400, nothing stored
+  - verifier raises (network/5xx) → stored with `is_verified=False` (don't block on upstream outages)
+  - Polymarket / X / Bluesky → skipped (listed in `VERIFICATION_SKIPPED`); stored with `is_verified=False`
 
 ## Dependencies
 - Imports from `data-layer`: `data.crud.user`, `data.models.user.User`, `data.models.linked_account.LinkedAccount`
