@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const result = dotenv.config({ path: resolve(__dirname, '../../.env.test') });
-if (result.error && (result.error as NodeJS.ErrnoException).code !== 'ENOENT') {
+if (result.error && (result.error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
   throw result.error;
 }
 
