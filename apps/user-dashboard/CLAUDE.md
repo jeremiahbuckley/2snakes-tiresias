@@ -46,3 +46,38 @@ src/
 ## Env Vars
 - `API_BASE_URL` — URL of api-gateway (set in `.env`)
 - `JWT_SECRET` — used server-side for session verification (if using SvelteKit sessions)
+
+## Testing
+
+Before marking any UI work done, run all three checks in order:
+
+1. **Type check**: `npm run check` — must pass with zero errors
+2. **Smoke tests**: `npm run test:smoke` — requires full local stack (API on 8000, dev server on 5173)
+3. **Contract tests**: `npm run test:contract` — no backend needed, CI-safe
+
+Quote the actual terminal output. Do not summarize a passing run.
+
+### Anti-patterns — never do these in test files
+- Hardcode `localhost`, port numbers, or base URLs — use `BASE_URLS` from `tests/ui-shared/config.ts`
+- Define `beforeEach` login blocks — use the `authedPage` fixture from `tests/ui-shared/fixtures.ts`
+- Import `test` or `expect` from `@playwright/test` directly — import from `tests/ui-shared/fixtures.ts`
+- Write credential strings — use `TEST_USER` from `tests/ui-shared/config.ts`
+- Inline JSON response data in contract tests — add a file to `tests/ui-shared/api-mocks/responses/`
+
+### Shared test utilities (read before writing any test)
+- Config: `tests/ui-shared/config.ts` — `BASE_URLS`, `TEST_USER`, `assertTestUserConfigured()`
+- Fixtures: `tests/ui-shared/fixtures.ts` — `test` (smoke), `contractTest` (contract), `expect`
+- Auth: `tests/ui-shared/helpers/auth.ts` — `login()`, `logout()`
+- API mocks: `tests/ui-shared/api-mocks/handlers.ts` — add entries to `pathToMockFile` for new routes
+
+### Running tests
+```bash
+# From apps/user-dashboard:
+npm run test:smoke      # smoke suite — needs real stack running
+npm run test:contract   # contract suite — no backend needed
+
+# Or with Playwright directly:
+npx playwright test --project=smoke
+npx playwright test --project=contract
+npx playwright test --project=contract --reporter=html  # generates report in playwright-report/
+```
