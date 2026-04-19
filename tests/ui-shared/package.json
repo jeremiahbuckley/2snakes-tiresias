@@ -1,0 +1,9 @@
+{
+  "name": "ui-shared",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@playwright/test": "^1.44.0",
+    "dotenv": "^16.4.0"
+  }
+}
