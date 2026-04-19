@@ -122,8 +122,13 @@ chmod +x .git/hooks/pre-commit   # if it's not already
 ## 8. Link a platform account (optional, needed for sync)
 
 The scheduler only syncs for users who have rows in the `linked_accounts` table with
-`is_enabled=true` and a Fernet-encrypted credential. Easiest way to seed one for local
-testing:
+`is_enabled=true` and a Fernet-encrypted credential. The steps below assume you already
+have a user account — if you don't, create one through the dashboard's `/register` page
+(http://localhost:5173/register) or by hitting `POST /auth/register` directly (see the
+"minimal smoke test" in [running.md](running.md)). Both paths give you back a `user_id`
+UUID that you'll plug into the `UPDATE` below.
+
+Easiest way to seed a linked account for local testing:
 
 ```bash
 # Encrypt your raw Metaculus token (or Manifold key, etc.)

@@ -70,6 +70,10 @@
         Continue with mock data (dev)
       </button>
     </form>
+
+    <p class="signup-link">
+      Don't have an account? <a href="/register">Create one</a>
+    </p>
   </div>
 </div>
 
@@ -211,4 +215,21 @@
 
   .divider::before { left: 0; }
   .divider::after { right: 0; }
+
+  .signup-link {
+    text-align: center;
+    color: #6b7280;
+    font-size: 13px;
+    margin-top: 20px;
+  }
+
+  .signup-link a {
+    color: #4f8ef7;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .signup-link a:hover {
+    text-decoration: underline;
+  }
 </style>

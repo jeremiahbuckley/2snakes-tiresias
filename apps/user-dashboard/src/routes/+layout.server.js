@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 
-const PUBLIC_ROUTES = ['/login'];
+const PUBLIC_ROUTES = ['/login', '/register'];
 const API_BASE = process.env.API_BASE_URL ?? 'http://localhost:8000';
 
 /** @type {import('./$types').LayoutServerLoad} */

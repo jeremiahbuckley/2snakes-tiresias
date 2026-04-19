@@ -120,9 +120,17 @@ cd apps/public-profile && npm run dev -- --port 5175
 The dashboard expects the API at `http://localhost:8000`. If you put a reverse proxy in
 front, adjust `apps/user-dashboard/src/lib/api.js` accordingly.
 
+The dashboard's entry routes are `/login` and `/register`; both are served publicly
+(everything else requires a valid `tiresias_token` cookie). `/register` posts to
+`POST /auth/register` and sets the JWT cookie on success, so it's the quickest way to
+get a real account without touching curl.
+
 ## A minimal smoke test
 
-Once the API is up:
+Once the API is up. (If the dashboard is also running, you can do the user-creation
+step through `http://localhost:5173/register` instead of the curl call below — but the
+curl version is handy when you're testing the API in isolation, before bringing up the
+frontend.)
 
 ```bash
 # Create a user
