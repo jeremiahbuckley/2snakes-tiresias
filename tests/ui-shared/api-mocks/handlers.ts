@@ -22,9 +22,9 @@ export async function registerApiMocks(page: Page): Promise<void> {
       });
     } else {
       await route.fulfill({
-        status: 404,
+        status: 500,
         contentType: 'application/json',
-        body: JSON.stringify({ detail: `no mock for ${url.pathname}` }),
+        body: JSON.stringify({ detail: `no mock registered for ${route.request().method()} ${url.pathname} — add it to pathToMockFile in handlers.ts` }),
       });
     }
   });
