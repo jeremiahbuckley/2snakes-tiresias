@@ -13,6 +13,10 @@ const BASE =
     ? (import.meta.env.PUBLIC_API_BASE_URL ?? 'http://localhost:8000')
     : 'http://localhost:8000';
 
+/**
+ * @param {string} path
+ * @param {{ token?: string, method?: string, body?: string, headers?: Record<string, string> }} [options]
+ */
 async function apiFetch(path, options = {}) {
   const { token, ...fetchOptions } = options;
   const headers = {
