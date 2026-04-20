@@ -1,0 +1,44 @@
+{
+  "user": {
+    "id": "usr_abc123",
+    "username": "jeremiah_b",
+    "display_name": "Jeremiah B.",
+    "email": "jeremiahbuckley@2snakes.com",
+    "bio": "Forecaster tracking markets across Kalshi, Polymarket, Manifold, and Metaculus.",
+    "avatar_url": null,
+    "social_links": {}
+  },
+  "score": {
+    "total_predictions": 10,
+    "resolved_predictions": 6,
+    "mean_brier_score": 0.162,
+    "brier_skill_score": 0.352,
+    "calibration_score": 0.82,
+    "accuracy": 0.67,
+    "last_scored_at": "2026-04-01T00:00:00Z",
+    "per_source": {
+      "kalshi": 0.14,
+      "polymarket": 0.18,
+      "manifold": 0.21,
+      "metaculus": 0.16
+    },
+    "per_domain": {}
+  },
+  "badges": [
+    {
+      "id": "first-prediction",
+      "name": "First Prediction",
+      "description": "Made your first prediction.",
+      "icon": "🎯",
+      "earned": true,
+      "earned_at": "2025-10-15T00:00:00Z"
+    }
+  ],
+  "recent_predictions": [
+    { "id": "p1", "market_id": "m1", "market_title": "Will the Fed cut rates before July 2025?", "source": "kalshi", "probability": 0.72, "outcome": "yes", "is_resolved": true, "brier_score": 0.078, "created_at": "2026-03-01T00:00:00Z", "resolved_at": "2026-03-15T00:00:00Z", "rationale": null, "category": null },
+    { "id": "p2", "market_id": "m2", "market_title": "Will BTC reach $100k by end of 2025?", "source": "polymarket", "probability": 0.55, "outcome": "no", "is_resolved": true, "brier_score": 0.302, "created_at": "2026-02-20T00:00:00Z", "resolved_at": "2026-03-01T00:00:00Z", "rationale": null, "category": null },
+    { "id": "p3", "market_id": "m3", "market_title": "Will Manifold add new question types in Q1 2026?", "source": "manifold", "probability": 0.40, "outcome": null, "is_resolved": false, "brier_score": null, "created_at": "2026-02-10T00:00:00Z", "resolved_at": null, "rationale": null, "category": null },
+    { "id": "p4", "market_id": "m4", "market_title": "Will GPT-5 release before March 2026?", "source": "metaculus", "probability": 0.65, "outcome": "yes", "is_resolved": true, "brier_score": 0.122, "created_at": "2026-01-15T00:00:00Z", "resolved_at": "2026-02-01T00:00:00Z", "rationale": null, "category": null },
+    { "id": "p5", "market_id": "m5", "market_title": "Will US unemployment stay below 5% in 2025?", "source": "kalshi", "probability": 0.80, "outcome": null, "is_resolved": false, "brier_score": null, "created_at": "2026-01-01T00:00:00Z", "resolved_at": null, "rationale": null, "category": null }
+  ]
+}

@@ -11,10 +11,26 @@ const routes = {
   'GET /auth/me/linked-accounts':  readFileSync(join(__dirname, 'api-mocks/responses/linked-accounts.json'), 'utf8'),
   'GET /auth/me/share-tokens':     readFileSync(join(__dirname, 'api-mocks/responses/share-tokens.json'), 'utf8'),
   'GET /auth/me/notifications':    readFileSync(join(__dirname, 'api-mocks/responses/notifications.json'), 'utf8'),
+  'GET /users/:userId/dashboard':  readFileSync(join(__dirname, 'api-mocks/responses/dashboard.json'), 'utf8'),
+  'GET /users/:userId/predictions': readFileSync(join(__dirname, 'api-mocks/responses/predictions.json'), 'utf8'),
+  'GET /users/:userId/stats':      readFileSync(join(__dirname, 'api-mocks/responses/stats.json'), 'utf8'),
 };
 
+function matchRoute(method, pathname, routes) {
+  const exact = routes[`${method} ${pathname}`];
+  if (exact !== undefined) return exact;
+  for (const [pattern, body] of Object.entries(routes)) {
+    const [patMethod, patPath] = pattern.split(' ');
+    if (patMethod !== method) continue;
+    const regex = new RegExp('^' + patPath.replace(/:[^/]+/g, '[^/]+') + '$');
+    if (regex.test(pathname)) return body;
+  }
+  return undefined;
+}
+
 const server = http.createServer((req, res) => {
-  const key = `${req.method} ${new URL(req.url, 'http://x').pathname}`;
+  const pathname = new URL(req.url, 'http://x').pathname;
+  const key = `${req.method} ${pathname}`;
 
   // Playwright polls GET / to detect when the server is ready.
   if (key === 'GET /') {
@@ -28,7 +44,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  const body = routes[key];
+  const body = matchRoute(req.method, pathname, routes);
   if (body) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(body);
