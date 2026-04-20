@@ -2,6 +2,11 @@ import { redirect, fail } from '@sveltejs/kit';
 
 const API_BASE = process.env.API_BASE_URL ?? 'http://localhost:8000';
 
+/** @type {import('./$types').PageServerLoad} */
+export async function load() {
+  return { devBypassEnabled: process.env.DEV_BYPASS_ENABLED === 'true' };
+}
+
 /** @type {import('./$types').Actions} */
 export const actions = {
   /** Real login: POST /auth/login → set JWT cookie. */
@@ -35,11 +40,10 @@ export const actions = {
     throw redirect(303, redirectTo);
   },
 
-  /**
-   * Dev bypass: sets a placeholder token so the dashboard is reachable
-   * while the real auth backend is still being built.
-   */
   devBypass: async ({ cookies, url }) => {
+    if (process.env.DEV_BYPASS_ENABLED !== 'true') {
+      return fail(403, { error: 'Dev bypass is not enabled.' });
+    }
     cookies.set('tiresias_token', 'dev-mock-token', {
       path: '/',
       httpOnly: true,

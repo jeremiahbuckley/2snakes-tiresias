@@ -1,6 +1,8 @@
 <script>
   import { enhance } from '$app/forms';
 
+  /** @type {import('./$types').PageData} */
+  export let data;
   /** @type {import('./$types').ActionData} */
   export let form;
 
@@ -63,13 +65,15 @@
       </button>
     </form>
 
-    <div class="divider">or</div>
+    {#if data.devBypassEnabled}
+      <div class="divider">or</div>
 
-    <form method="POST" action="?/devBypass">
-      <button type="submit" class="btn btn-secondary">
-        Continue with mock data (dev)
-      </button>
-    </form>
+      <form method="POST" action="?/devBypass">
+        <button type="submit" class="btn btn-secondary">
+          Continue with mock data (dev)
+        </button>
+      </form>
+    {/if}
 
     <p class="signup-link">
       Don't have an account? <a href="/register">Create one</a>
