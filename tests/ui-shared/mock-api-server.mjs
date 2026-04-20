@@ -17,9 +17,14 @@ const server = http.createServer((req, res) => {
   const key = `${req.method} ${req.url}`;
 
   // Playwright polls GET / to detect when the server is ready.
-  if (key === 'GET /' || key === 'HEAD /') {
+  if (key === 'GET /') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ status: 'ok' }));
+    return;
+  }
+  if (key === 'HEAD /') {
+    res.writeHead(200);
+    res.end();
     return;
   }
 
