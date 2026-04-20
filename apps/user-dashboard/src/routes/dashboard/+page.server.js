@@ -10,7 +10,7 @@ export async function load({ cookies }) {
 
   const recentPredictions = mockPredictions
     .slice()
-    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, 5);
 
   return {
