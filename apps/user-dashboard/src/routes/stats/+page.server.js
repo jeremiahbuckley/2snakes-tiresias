@@ -1,15 +1,12 @@
-import { mockScore, mockCalibration, mockBrierTimeline } from '$lib/mock.js';
+import { getUserStats } from '$lib/api.js';
 
 /** @type {import('./$types').PageServerLoad} */
-export async function load() {
-  // TODO: replace with real API calls once api-gateway is live:
-  //   const dashboard = await getDashboard(userId, token);
-  //   const calibration = dashboard.calibration_buckets;
-  //   const timeline = dashboard.brier_timeline;
-
+export async function load({ parent }) {
+  const { user, token } = await parent();
+  const data = await getUserStats(user.id, token);
   return {
-    score: mockScore,
-    calibration: mockCalibration,
-    brierTimeline: mockBrierTimeline,
+    score: data.score,
+    calibration: data.calibration,
+    brierTimeline: data.brier_timeline,
   };
 }
