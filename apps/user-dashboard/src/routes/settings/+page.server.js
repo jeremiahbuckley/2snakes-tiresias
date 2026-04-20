@@ -9,7 +9,12 @@ const SOCIAL_PLATFORMS = ['x', 'bluesky'];
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Thin fetch wrapper — throws { status, detail } on non-ok responses. */
+/**
+ * Thin fetch wrapper — throws { status, detail } on non-ok responses.
+ * @param {typeof fetch} fetch
+ * @param {string} path
+ * @param {{ token?: string, method?: string, body?: unknown }} [options]
+ */
 async function api(fetch, path, { token, method = 'GET', body } = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
     method,
