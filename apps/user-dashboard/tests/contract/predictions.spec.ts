@@ -16,6 +16,7 @@ contractTest.describe('predictions', () => {
 
   contractTest('status filter tab updates page URL', async ({ authedPage: page }) => {
     await page.goto('/predictions');
+    await page.waitForLoadState('networkidle');
     await page.getByRole('button', { name: 'Resolved' }).click();
     await expect(page).toHaveURL(/status=resolved/);
   });
