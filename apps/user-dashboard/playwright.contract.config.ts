@@ -25,7 +25,7 @@ export default defineConfig({
     },
     {
       command: 'npm run dev -- --port 5181',
-      env: { API_BASE_URL: 'http://localhost:8001' },
+      env: { API_BASE_URL: 'http://localhost:8001', PUBLIC_API_BASE_URL: 'http://localhost:8001' },
       url: 'http://localhost:5181',
       reuseExistingServer: !process.env.CI,
     },
