@@ -9,8 +9,8 @@ contractTest.describe('predictions', () => {
 
   contractTest('source filter tab updates page URL', async ({ authedPage: page }) => {
     await page.goto('/predictions');
-    // Platform tabs are in the filter bar; use exact text within .source-tabs to avoid ambiguity
-    await page.locator('.filter-bar .tab', { hasText: 'kalshi' }).click();
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', { name: 'kalshi' }).click();
     await expect(page).toHaveURL(/source=kalshi/);
   });
 
