@@ -133,12 +133,9 @@ def _pred_dict(p: object) -> dict:
     outcome = None
     if p.is_resolved:
         outcome = 'yes' if _infer_outcome(float(p.probability), float(p.brier_score)) == 1 else 'no'
-    # Market.question holds the question text; fall back to market_id if missing.
-    # NOTE: if the Market model uses a different field name (e.g. 'title'),
-    # change 'question' to the correct attribute name here.
     market_title = None
     if p.market is not None:
-        market_title = getattr(p.market, 'question', None) or getattr(p.market, 'title', None)
+        market_title = p.market.title
     return {
         'id': str(p.id),
         'market_id': str(p.market_id),
@@ -246,7 +243,6 @@ async def get_predictions(
 
     return {
         'predictions': [_pred_dict(p) for p in predictions],
-        'total': total,
         'totals': {
             'all': score.total_predictions if score else 0,
             'resolved': score.resolved_predictions if score else 0,
