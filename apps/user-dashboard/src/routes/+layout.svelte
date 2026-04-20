@@ -1,6 +1,8 @@
 <script>
   import { page } from '$app/stores';
 
+  export let data;
+
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: '⬛' },
     { href: '/predictions', label: 'Predictions', icon: '📋' },
@@ -47,6 +49,11 @@
 
   <!-- Main content -->
   <main class="main">
+    {#if data.isMockSession}
+      <div class="mock-banner">
+        ⚠ Mock data mode — not connected to real backend
+      </div>
+    {/if}
     <slot />
   </main>
 </div>
@@ -182,6 +189,17 @@
     flex: 1;
     padding: 32px 40px;
     min-height: 100vh;
+  }
+
+  .mock-banner {
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    color: #92400e;
+    padding: 10px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 24px;
   }
 
   @media (max-width: 768px) {
