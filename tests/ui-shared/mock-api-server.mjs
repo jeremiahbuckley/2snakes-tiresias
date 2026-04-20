@@ -14,7 +14,7 @@ const routes = {
 };
 
 const server = http.createServer((req, res) => {
-  const key = `${req.method} ${req.url}`;
+  const key = `${req.method} ${new URL(req.url, 'http://x').pathname}`;
 
   // Playwright polls GET / to detect when the server is ready.
   if (key === 'GET /') {
