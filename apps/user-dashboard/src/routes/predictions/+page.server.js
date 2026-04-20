@@ -22,9 +22,9 @@ export async function load({ url }) {
   }
 
   if (sortBy === 'date_desc') {
-    predictions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    predictions.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   } else if (sortBy === 'date_asc') {
-    predictions.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    predictions.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   } else if (sortBy === 'brier_asc') {
     predictions.sort((a, b) => {
       if (a.brier_score == null) return 1;
