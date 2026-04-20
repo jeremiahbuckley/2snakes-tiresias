@@ -21,10 +21,8 @@ export const contractTest = base.extend<{
   guestPage: Page;
 }>({
   authedPage: async ({ page }, use) => {
-    // Use the dev bypass (no API call) so contract tests work without a real backend.
-    await page.goto('/login');
-    await page.getByRole('button', { name: /continue with mock data/i }).click();
-    await page.waitForURL('/dashboard');
+    // Mock API server accepts any credentials — no real user env vars needed.
+    await login(page, 'test@contract.local', 'contract-password');
     await use(page);
   },
   guestPage: async ({ page }, use) => {
