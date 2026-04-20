@@ -12,11 +12,6 @@ export default defineConfig({
       use: { baseURL: BASE_URLS.dashboard },
       testDir: resolve(__dirname, 'tests/smoke'),
     },
-    {
-      name: 'contract',
-      use: { baseURL: BASE_URLS.dashboard },
-      testDir: resolve(__dirname, 'tests/contract'),
-    },
   ],
   use: {
     trace: 'on-first-retry',

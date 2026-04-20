@@ -9,8 +9,8 @@
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
-    "test:smoke": "playwright test --project=smoke",
-    "test:contract": "playwright test --project=contract"
+    "test:smoke":    "playwright test --config playwright.config.ts",
+    "test:contract": "playwright test --config playwright.contract.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.44.0",
