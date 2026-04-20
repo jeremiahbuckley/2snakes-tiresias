@@ -10,7 +10,6 @@ gateway becomes a thin proxy; frontend and mock server are untouched.
 """
 from __future__ import annotations
 
-import math
 from collections import defaultdict
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID
