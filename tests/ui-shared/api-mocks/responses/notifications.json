@@ -1,0 +1,5 @@
+{
+  "email_on_resolution": true,
+  "email_on_badge": true,
+  "email_on_rank_change": false
+}
