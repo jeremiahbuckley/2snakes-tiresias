@@ -1,0 +1,172 @@
+"""
+Gateway query layer — DB queries and computation for dashboard endpoints.
+
+All functions are plain Python (no FastAPI concerns). Pure helpers are
+synchronous; DB query functions are async.
+
+Future: when data-work endpoint count exceeds ~10, extract this module
+and the three route handlers into a standalone data microservice. The
+gateway becomes a thin proxy; frontend and mock server are untouched.
+"""
+from __future__ import annotations
+
+import math
+from collections import defaultdict
+from typing import TYPE_CHECKING, Optional
+from uuid import UUID
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from data.models.market import Market
+    from data.models.prediction import Prediction
+    from data.models.score import UserScore
+    from data.models.user import User
+
+BADGE_CATALOG: dict[str, dict] = {
+    'first-prediction': {
+        'name': 'First Prediction',
+        'description': 'Made your first prediction.',
+        'icon': '🎯',
+    },
+    'above-baseline': {
+        'name': 'Above Baseline',
+        'description': 'Mean Brier score below 0.25.',
+        'icon': '📈',
+    },
+}
+
+
+# ── Pure helpers ─────────────────────────────────────────────────────────────
+
+def _infer_outcome(probability: float, brier_score: float) -> int:
+    """Return 1 (YES) or 0 (NO) by recovering the binary outcome from brier_score."""
+    return 1 if abs((probability - 1.0) ** 2 - brier_score) < abs(probability ** 2 - brier_score) else 0
+
+
+def _compute_per_source(resolved_predictions: list) -> dict:
+    """Mean resolved Brier score grouped by platform source."""
+    source_scores: dict[str, list[float]] = defaultdict(list)
+    for p in resolved_predictions:
+        if p.source:
+            source_scores[p.source].append(float(p.brier_score))
+    return {
+        src: round(sum(scores) / len(scores), 4)
+        for src, scores in source_scores.items()
+    }
+
+
+def _compute_calibration(resolved_predictions: list) -> list[dict]:
+    """10-bin calibration curve from resolved predictions.
+
+    Future: precompute and cache in user_scores JSONB when query latency
+    becomes noticeable.
+    """
+    bins: dict[int, list[int]] = defaultdict(list)
+    for p in resolved_predictions:
+        prob = float(p.probability)
+        brier = float(p.brier_score)
+        bin_idx = min(int(prob * 10), 9)
+        bins[bin_idx].append(_infer_outcome(prob, brier))
+    result = []
+    for i in range(10):
+        midpoint = round(i * 0.1 + 0.05, 2)
+        outcomes = bins[i]
+        result.append({
+            'bin': midpoint,
+            'predicted': midpoint,
+            'actual': round(sum(outcomes) / len(outcomes), 4) if outcomes else None,
+            'count': len(outcomes),
+        })
+    return result
+
+
+def _compute_brier_timeline(resolved_predictions: list) -> list[dict]:
+    """Monthly mean Brier score, ordered ascending by month.
+
+    Future: precompute and cache in user_scores JSONB when query latency
+    becomes noticeable.
+    """
+    monthly: dict[str, list[float]] = defaultdict(list)
+    for p in resolved_predictions:
+        if p.resolved_at is not None:
+            monthly[p.resolved_at.strftime('%Y-%m')].append(float(p.brier_score))
+    return [
+        {'date': m, 'score': round(sum(s) / len(s), 4)}
+        for m, s in sorted(monthly.items())
+    ]
+
+
+def _score_dict(score: Optional[object], per_source: dict) -> dict:
+    """Serialize a UserScore row (or None) to a response-ready dict."""
+    if score is None:
+        return {
+            'total_predictions': 0,
+            'resolved_predictions': 0,
+            'mean_brier_score': None,
+            'brier_skill_score': None,
+            'calibration_score': None,
+            'accuracy': None,
+            'last_scored_at': None,
+            'per_source': per_source,
+            'per_domain': {},
+        }
+    mean_brier = float(score.mean_brier_score) if score.mean_brier_score is not None else None
+    # BSS = (uninformed_score - mean_brier) / uninformed_score
+    # Uninformed baseline for binary forecasting = 0.25
+    bss = round((0.25 - mean_brier) / 0.25, 4) if mean_brier is not None else None
+    return {
+        'total_predictions': score.total_predictions,
+        'resolved_predictions': score.resolved_predictions,
+        'mean_brier_score': mean_brier,
+        'brier_skill_score': bss,
+        'calibration_score': float(score.calibration_score) if score.calibration_score is not None else None,
+        'accuracy': float(score.accuracy) if score.accuracy is not None else None,
+        'last_scored_at': score.last_scored_at.isoformat() if score.last_scored_at else None,
+        'per_source': per_source,
+        'per_domain': {},  # domain taxonomy not yet stored in DB
+    }
+
+
+def _pred_dict(p: object) -> dict:
+    """Serialize a Prediction row (with eagerly-loaded .market) to a response dict."""
+    outcome = None
+    if p.is_resolved:
+        outcome = 'yes' if _infer_outcome(float(p.probability), float(p.brier_score)) == 1 else 'no'
+    # Market.question holds the question text; fall back to market_id if missing.
+    # NOTE: if the Market model uses a different field name (e.g. 'title'),
+    # change 'question' to the correct attribute name here.
+    market_title = None
+    if p.market is not None:
+        market_title = getattr(p.market, 'question', None) or getattr(p.market, 'title', None)
+    return {
+        'id': str(p.id),
+        'market_id': str(p.market_id),
+        'market_title': market_title or str(p.market_id),
+        'source': p.source,
+        'probability': float(p.probability),
+        'outcome': outcome,
+        'is_resolved': p.is_resolved,
+        'brier_score': float(p.brier_score) if p.brier_score is not None else None,
+        'rationale': p.rationale,
+        'category': None,  # category not stored on Prediction; add when Market gains tags
+        'created_at': p.created_at.isoformat(),
+        'resolved_at': p.resolved_at.isoformat() if p.resolved_at else None,
+    }
+
+
+# ── DB query functions (placeholders — implemented in Task 2) ────────────────
+
+async def get_dashboard_data(session: object, user_id: UUID) -> dict:
+    raise NotImplementedError
+
+async def get_predictions(
+    session: object,
+    user_id: UUID,
+    source: Optional[str],
+    status: Optional[str],
+    sort: Optional[str],
+) -> dict:
+    raise NotImplementedError
+
+async def get_stats_data(session: object, user_id: UUID) -> dict:
+    raise NotImplementedError
