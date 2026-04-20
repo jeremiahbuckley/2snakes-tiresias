@@ -7,10 +7,10 @@ contractTest.describe('dashboard', () => {
     await expect(page.getByText('Welcome back, Jeremiah B.')).toBeVisible();
   });
 
-  contractTest('shows resolved and total prediction counts', async ({ authedPage: page }) => {
+  contractTest('shows resolved prediction count from mock data', async ({ authedPage: page }) => {
     await page.goto('/dashboard');
-    // stat card shows "189 / 247" — 189 is rendered as text, 247 in .stat-denom span
-    await expect(page.getByText('189')).toBeVisible();
+    // mock dashboard.json has resolved_predictions: 6, total_predictions: 10 → "60% resolved"
+    await expect(page.getByText('60% resolved')).toBeVisible();
   });
 
   contractTest('recent activity table has exactly 5 rows', async ({ authedPage: page }) => {
