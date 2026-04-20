@@ -120,3 +120,230 @@ def test_compute_per_source_groups_by_source():
     result = _compute_per_source([p1, p2, p3])
     assert abs(result['kalshi'] - 0.15) < 0.001  # mean(0.10, 0.20)
     assert result['manifold'] == 0.3
+
+
+# ── DB query function tests ───────────────────────────────────────────────────
+# Run: DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/tiresias_test
+#      pytest services/api-gateway/tests/test_data_queries.py -v -k "db"
+
+import uuid
+from datetime import datetime, timezone
+from sqlalchemy import select
+
+from data.models.market import Market
+from data.models.prediction import Prediction
+from data.models.score import UserScore
+from data.models.user import User
+from api_gateway.data_queries import get_dashboard_data, get_predictions, get_stats_data
+
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+async def _make_user(session) -> User:
+    user = User(
+        email=f"test-{uuid.uuid4().hex}@example.com",
+        username=f"u{uuid.uuid4().hex[:8]}",
+        hashed_password="$2b$12$fakehash",
+    )
+    session.add(user)
+    await session.flush()
+    return user
+
+
+async def _make_market(session, question: str = "Will X happen?") -> Market:
+    # Market uses 'title' instead of 'question'
+    m = Market(title=question)
+    session.add(m)
+    await session.flush()
+    return m
+
+
+async def _make_prediction(
+    session,
+    user: User,
+    market: Market,
+    probability: float = 0.7,
+    source: str = "kalshi",
+    brier_score: float | None = None,
+    resolved_at: datetime | None = None,
+) -> Prediction:
+    p = Prediction(
+        user_id=user.id,
+        market_id=market.id,
+        probability=probability,
+        source=source,
+        brier_score=brier_score,
+        resolved_at=resolved_at,
+    )
+    session.add(p)
+    await session.flush()
+    return p
+
+
+async def _make_score(session, user: User, **kwargs) -> UserScore:
+    defaults = {
+        'total_predictions': 0,
+        'resolved_predictions': 0,
+        'badge_ids': [],
+    }
+    defaults.update(kwargs)
+    s = UserScore(user_id=user.id, **defaults)
+    session.add(s)
+    await session.flush()
+    return s
+
+
+# ── get_dashboard_data ────────────────────────────────────────────────────────
+
+async def test_db_dashboard_no_score_returns_zeroed(session):
+    user = await _make_user(session)
+    result = await get_dashboard_data(session, user.id)
+    assert result['score']['total_predictions'] == 0
+    assert result['score']['mean_brier_score'] is None
+    assert result['badges'] == []
+    assert result['recent_predictions'] == []
+    assert result['user']['id'] == str(user.id)
+
+
+async def test_db_dashboard_returns_score_fields(session):
+    user = await _make_user(session)
+    await _make_score(
+        session, user,
+        total_predictions=10,
+        resolved_predictions=6,
+        mean_brier_score=0.18,
+        badge_ids=['first-prediction'],
+    )
+    result = await get_dashboard_data(session, user.id)
+    assert result['score']['total_predictions'] == 10
+    assert result['score']['resolved_predictions'] == 6
+    assert abs(result['score']['mean_brier_score'] - 0.18) < 0.001
+
+
+async def test_db_dashboard_returns_up_to_5_recent_predictions(session):
+    user = await _make_user(session)
+    market = await _make_market(session)
+    for i in range(7):
+        await _make_prediction(
+            session, user, market,
+            source='kalshi',
+            resolved_at=datetime(2026, 1, i + 1, tzinfo=timezone.utc) if i < 4 else None,
+            brier_score=0.1 if i < 4 else None,
+        )
+    result = await get_dashboard_data(session, user.id)
+    assert len(result['recent_predictions']) == 5
+
+
+async def test_db_dashboard_badges_resolved_from_catalog(session):
+    user = await _make_user(session)
+    await _make_score(
+        session, user,
+        total_predictions=5,
+        resolved_predictions=3,
+        badge_ids=['first-prediction', 'above-baseline'],
+    )
+    result = await get_dashboard_data(session, user.id)
+    badge_ids = [b['id'] for b in result['badges']]
+    assert 'first-prediction' in badge_ids
+    assert 'above-baseline' in badge_ids
+    assert all(b['earned'] is True for b in result['badges'])
+
+
+# ── get_predictions ───────────────────────────────────────────────────────────
+
+async def test_db_predictions_returns_all_when_no_filter(session):
+    user = await _make_user(session)
+    market = await _make_market(session)
+    for _ in range(3):
+        await _make_prediction(session, user, market)
+    result = await get_predictions(session, user.id, None, None, None)
+    assert len(result['predictions']) == 3
+    assert result['total'] == 3
+
+
+async def test_db_predictions_filters_by_source(session):
+    user = await _make_user(session)
+    market = await _make_market(session)
+    await _make_prediction(session, user, market, source='kalshi')
+    await _make_prediction(session, user, market, source='manifold')
+    await _make_prediction(session, user, market, source='kalshi')
+    result = await get_predictions(session, user.id, 'kalshi', None, None)
+    assert result['total'] == 2
+    assert all(p['source'] == 'kalshi' for p in result['predictions'])
+
+
+async def test_db_predictions_filters_resolved(session):
+    user = await _make_user(session)
+    market = await _make_market(session)
+    await _make_prediction(
+        session, user, market, brier_score=0.09,
+        resolved_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    await _make_prediction(session, user, market)  # pending
+    result = await get_predictions(session, user.id, None, 'resolved', None)
+    assert result['total'] == 1
+    assert result['predictions'][0]['is_resolved'] is True
+
+
+async def test_db_predictions_filters_pending(session):
+    user = await _make_user(session)
+    market = await _make_market(session)
+    await _make_prediction(
+        session, user, market, brier_score=0.09,
+        resolved_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+    )
+    await _make_prediction(session, user, market)  # pending
+    result = await get_predictions(session, user.id, None, 'pending', None)
+    assert result['total'] == 1
+    assert result['predictions'][0]['is_resolved'] is False
+
+
+async def test_db_predictions_sorts_by_brier_asc(session):
+    user = await _make_user(session)
+    market = await _make_market(session)
+    t = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    await _make_prediction(session, user, market, brier_score=0.20, resolved_at=t)
+    await _make_prediction(session, user, market, brier_score=0.05, resolved_at=t)
+    result = await get_predictions(session, user.id, None, None, 'brier_asc')
+    scores = [p['brier_score'] for p in result['predictions'] if p['brier_score'] is not None]
+    assert scores == sorted(scores)
+
+
+async def test_db_predictions_includes_totals(session):
+    user = await _make_user(session)
+    await _make_score(
+        session, user, total_predictions=10, resolved_predictions=6
+    )
+    market = await _make_market(session)
+    await _make_prediction(session, user, market)
+    result = await get_predictions(session, user.id, None, None, None)
+    assert result['totals']['all'] == 10
+    assert result['totals']['resolved'] == 6
+    assert result['totals']['pending'] == 4
+
+
+# ── get_stats_data ────────────────────────────────────────────────────────────
+
+async def test_db_stats_no_predictions_returns_empty_charts(session):
+    user = await _make_user(session)
+    result = await get_stats_data(session, user.id)
+    assert result['calibration'] == [
+        {'bin': round(i * 0.1 + 0.05, 2), 'predicted': round(i * 0.1 + 0.05, 2), 'actual': None, 'count': 0}
+        for i in range(10)
+    ]
+    assert result['brier_timeline'] == []
+
+
+async def test_db_stats_returns_score_and_charts(session):
+    user = await _make_user(session)
+    await _make_score(
+        session, user, total_predictions=5, resolved_predictions=3, mean_brier_score=0.15
+    )
+    market = await _make_market(session)
+    t = datetime(2026, 3, 1, tzinfo=timezone.utc)
+    # prob=0.8, outcome=YES: brier=(0.8-1)^2=0.04
+    await _make_prediction(session, user, market, probability=0.8, brier_score=0.04, resolved_at=t)
+    result = await get_stats_data(session, user.id)
+    assert result['score']['total_predictions'] == 5
+    assert len(result['calibration']) == 10
+    assert result['brier_timeline'] == [{'date': '2026-03', 'score': 0.04}]

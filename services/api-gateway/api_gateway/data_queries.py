@@ -11,15 +11,17 @@ gateway becomes a thin proxy; frontend and mock server are untouched.
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 from uuid import UUID
 
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-    from data.models.market import Market
-    from data.models.prediction import Prediction
-    from data.models.score import UserScore
-    from data.models.user import User
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from data.models.market import Market
+from data.models.prediction import Prediction
+from data.models.score import UserScore
+from data.models.user import User
 
 BADGE_CATALOG: dict[str, dict] = {
     'first-prediction': {
@@ -153,19 +155,118 @@ def _pred_dict(p: object) -> dict:
     }
 
 
-# ── DB query functions (placeholders — implemented in Task 2) ────────────────
+# ── DB query functions ───────────────────────────────────────────────────────
 
-async def get_dashboard_data(session: object, user_id: UUID) -> dict:
-    raise NotImplementedError
+async def get_dashboard_data(session: AsyncSession, user_id: UUID) -> dict:
+    user_result = await session.execute(select(User).where(User.id == user_id))
+    user = user_result.scalar_one()
+
+    score_result = await session.execute(select(UserScore).where(UserScore.user_id == user_id))
+    score = score_result.scalar_one_or_none()
+
+    recent_result = await session.execute(
+        select(Prediction)
+        .where(Prediction.user_id == user_id)
+        .options(selectinload(Prediction.market))
+        .order_by(Prediction.created_at.desc())
+        .limit(5)
+    )
+    recent = recent_result.scalars().all()
+
+    resolved_result = await session.execute(
+        select(Prediction)
+        .where(Prediction.user_id == user_id, Prediction.brier_score.is_not(None))
+    )
+    resolved = resolved_result.scalars().all()
+
+    badge_ids = (score.badge_ids or []) if score else []
+    badges = [
+        {
+            **BADGE_CATALOG[b],
+            'id': b,
+            'earned': True,
+            'earned_at': score.last_scored_at.isoformat() if score and score.last_scored_at else None,
+        }
+        for b in badge_ids
+        if b in BADGE_CATALOG
+    ]
+
+    return {
+        'user': {
+            'id': str(user.id),
+            'username': user.username,
+            'display_name': user.display_name,
+            'email': user.email,
+            'bio': user.bio,
+            'avatar_url': user.avatar_url,
+            'social_links': user.social_links or {},
+        },
+        'score': _score_dict(score, _compute_per_source(resolved)),
+        'badges': badges,
+        'recent_predictions': [_pred_dict(p) for p in recent],
+    }
+
 
 async def get_predictions(
-    session: object,
+    session: AsyncSession,
     user_id: UUID,
     source: Optional[str],
     status: Optional[str],
     sort: Optional[str],
 ) -> dict:
-    raise NotImplementedError
+    base = select(Prediction).where(Prediction.user_id == user_id)
 
-async def get_stats_data(session: object, user_id: UUID) -> dict:
-    raise NotImplementedError
+    if source and source != 'all':
+        base = base.where(Prediction.source == source)
+    if status == 'resolved':
+        base = base.where(Prediction.brier_score.is_not(None))
+    elif status == 'pending':
+        base = base.where(Prediction.brier_score.is_(None))
+
+    count_result = await session.execute(
+        select(func.count()).select_from(base.subquery())
+    )
+    total = count_result.scalar_one()
+
+    if sort in ('brier_asc', 'brier_score'):
+        base = base.order_by(Prediction.brier_score.asc().nulls_last())
+    elif sort == 'brier_desc':
+        base = base.order_by(Prediction.brier_score.desc().nulls_last())
+    elif sort == 'date_asc':
+        base = base.order_by(Prediction.created_at.asc())
+    else:
+        base = base.order_by(Prediction.created_at.desc())
+
+    paged = base.limit(50).options(selectinload(Prediction.market))
+    pred_result = await session.execute(paged)
+    predictions = pred_result.scalars().all()
+
+    score_result = await session.execute(select(UserScore).where(UserScore.user_id == user_id))
+    score = score_result.scalar_one_or_none()
+
+    return {
+        'predictions': [_pred_dict(p) for p in predictions],
+        'total': total,
+        'totals': {
+            'all': score.total_predictions if score else 0,
+            'resolved': score.resolved_predictions if score else 0,
+            'pending': (score.total_predictions - score.resolved_predictions) if score else 0,
+        },
+    }
+
+
+async def get_stats_data(session: AsyncSession, user_id: UUID) -> dict:
+    score_result = await session.execute(select(UserScore).where(UserScore.user_id == user_id))
+    score = score_result.scalar_one_or_none()
+
+    resolved_result = await session.execute(
+        select(Prediction)
+        .where(Prediction.user_id == user_id, Prediction.brier_score.is_not(None))
+    )
+    resolved = resolved_result.scalars().all()
+
+    return {
+        'score': _score_dict(score, _compute_per_source(resolved)),
+        'calibration': _compute_calibration(resolved),
+        'brier_timeline': _compute_brier_timeline(resolved),
+    }
