@@ -23,12 +23,11 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Mount service routers
     from auth_service.api import router as auth_router
     app.include_router(auth_router)
-    # TODO: mount additional routers as services are implemented:
-    # from badge_service.api import router as badge_router
-    # app.include_router(badge_router)
+
+    from api_gateway.router import router as data_router
+    app.include_router(data_router)
 
     @app.get("/health")
     async def health() -> dict:
