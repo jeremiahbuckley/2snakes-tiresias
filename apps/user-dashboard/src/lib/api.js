@@ -76,6 +76,34 @@ export async function getDashboard(userId, token) {
 }
 
 // ---------------------------------------------------------------------------
+// Predictions  —  GET /users/{user_id}/predictions
+// ---------------------------------------------------------------------------
+
+/**
+ * Paginated, filtered prediction list.
+ * @param {string} userId
+ * @param {string} token
+ * @param {{ source?: string, status?: string, sort?: string }} [filters]
+ */
+export async function getPredictions(userId, token, { source = '', status = '', sort = 'date_desc' } = {}) {
+  const params = new URLSearchParams();
+  if (source && source !== 'all') params.set('source', source);
+  if (status && status !== 'all') params.set('status', status);
+  if (sort && sort !== 'date_desc') params.set('sort', sort);
+  const qs = params.toString();
+  return apiFetch(`/users/${userId}/predictions${qs ? '?' + qs : ''}`, { token });
+}
+
+// ---------------------------------------------------------------------------
+// Stats  —  GET /users/{user_id}/stats
+// ---------------------------------------------------------------------------
+
+/** Scores + calibration curve + Brier timeline. */
+export async function getUserStats(userId, token) {
+  return apiFetch(`/users/${userId}/stats`, { token });
+}
+
+// ---------------------------------------------------------------------------
 // Linked accounts  —  market sources + social publishing
 // All platforms: kalshi | polymarket | manifold | metaculus | x | bluesky
 // ---------------------------------------------------------------------------
