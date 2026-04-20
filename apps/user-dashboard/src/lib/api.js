@@ -1,17 +1,15 @@
 /**
  * Tiresias API client.
  *
- * All functions read PUBLIC_API_BASE_URL from the environment
- * (set in .env as PUBLIC_API_BASE_URL=http://localhost:8000).
+ * Server-side (Node.js/SSR): reads API_BASE_URL from process.env.
+ * Client-side (browser): reads PUBLIC_API_BASE_URL from import.meta.env.
  *
  * Each function maps to a specific api-gateway endpoint.
- * Swap TODO comments as each backend endpoint is deployed.
  */
 
-const BASE =
-  typeof import.meta !== 'undefined' && import.meta.env
-    ? (import.meta.env.PUBLIC_API_BASE_URL ?? 'http://localhost:8000')
-    : 'http://localhost:8000';
+const BASE = typeof window === 'undefined'
+  ? (process.env.API_BASE_URL ?? 'http://localhost:8000')
+  : (import.meta.env.PUBLIC_API_BASE_URL ?? 'http://localhost:8000');
 
 /**
  * @param {string} path
