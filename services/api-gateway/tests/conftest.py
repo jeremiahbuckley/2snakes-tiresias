@@ -1,5 +1,6 @@
 """Async Postgres fixtures for api-gateway tests."""
 import os
+import socket
 import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
@@ -12,9 +13,20 @@ TEST_DB_URL = os.environ.get(
 )
 
 
+def _postgres_available() -> bool:
+    try:
+        s = socket.create_connection(("127.0.0.1", 5432), timeout=1)
+        s.close()
+        return True
+    except OSError:
+        return False
+
+
 @pytest_asyncio.fixture(scope="session")
 async def _ddl_engine():
     """Session-scoped engine used only for DDL (create_all / drop_all)."""
+    if not _postgres_available():
+        pytest.skip("No Postgres available at localhost:5432")
     eng = create_async_engine(TEST_DB_URL, echo=False)
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -24,7 +36,7 @@ async def _ddl_engine():
     await eng.dispose()
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def _require_ddl(_ddl_engine):
     """Ensure tables are created before each test (sync wrapper — no teardown needed)."""
     pass
