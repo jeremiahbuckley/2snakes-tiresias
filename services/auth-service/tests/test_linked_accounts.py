@@ -245,3 +245,38 @@ class TestVerifiersRegistry:
         assert la.VERIFIERS[la.Platform.POLYMARKET] is la.verify_polymarket_credential
         assert la.VERIFIERS[la.Platform.MANIFOLD] is la.verify_manifold_credential
         assert la.VERIFIERS[la.Platform.METACULUS] is la.verify_metaculus_credential
+
+
+# ---------------------------------------------------------------------------
+# verify_upsert_credential — Polymarket dispatch (3-field path)
+# ---------------------------------------------------------------------------
+
+class TestVerifyUpsertCredentialPolymarket:
+    def _sign(self, message: str) -> tuple[str, str]:
+        """Generate a throwaway eth key, sign `message`, return (address, sig_hex)."""
+        from eth_account import Account
+        from eth_account.messages import encode_defunct
+
+        acct = Account.create()
+        signed = Account.sign_message(encode_defunct(text=message), private_key=acct.key)
+        return acct.address, signed.signature.hex()
+
+    async def test_valid_three_fields_returns_true(self) -> None:
+        address, signature = self._sign("link this wallet to tiresias")
+        result = await la.verify_upsert_credential(
+            la.Platform.POLYMARKET, address, signature, message="link this wallet to tiresias"
+        )
+        assert result is True
+
+    async def test_missing_message_raises_valueerror(self) -> None:
+        with pytest.raises(ValueError, match="message is required"):
+            await la.verify_upsert_credential(
+                la.Platform.POLYMARKET, "0x1234", "0xsig"
+            )
+
+    async def test_mismatched_message_returns_false(self) -> None:
+        address, signature = self._sign("hello")
+        result = await la.verify_upsert_credential(
+            la.Platform.POLYMARKET, address, signature, message="goodbye"
+        )
+        assert result is False

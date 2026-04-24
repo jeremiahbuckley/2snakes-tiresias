@@ -25,7 +25,7 @@ from __future__ import annotations
 import base64
 import datetime
 import logging
-from typing import Awaitable, Callable, Union
+from typing import Awaitable, Callable, Optional, Union
 
 import httpx
 
@@ -313,18 +313,15 @@ VERIFIERS: dict[Platform, VerifierFn] = {
 # ---------------------------------------------------------------------------
 # Platforms we skip verification for in the unified upsert flow
 # ---------------------------------------------------------------------------
-# - Polymarket: verifier takes (wallet_address, message, signature) which the
-#   current link form doesn't collect. Tracked in FUTURE_FEATURES.md — deferred
-#   until we build a wallet-signing flow (EIP-1193 / wagmi) in the dashboard.
 # - X / Bluesky: verifiers are still stubs (raise NotImplementedError).
 
 VERIFICATION_SKIPPED: frozenset[Platform] = frozenset(
-    {Platform.POLYMARKET, Platform.X, Platform.BLUESKY}
+    {Platform.X, Platform.BLUESKY}
 )
 
 
 async def verify_upsert_credential(
-    platform: Platform, external_identifier: str, credential: str
+    platform: Platform, external_identifier: str, credential: str, *, message: Optional[str] = None
 ) -> bool | None:
     """
     Unified dispatch used by ``upsert_linked_account``.
@@ -339,18 +336,23 @@ async def verify_upsert_credential(
         httpx.HTTPError — network / upstream 5xx. Caller may treat this as
                           "accept but mark unverified" to avoid blocking on
                           upstream outages.
-        ValueError      — malformed input (empty required field, bad PEM).
+        ValueError      — malformed input (empty required field, bad PEM,
+                          missing message for Polymarket).
 
     Per-platform argument mapping:
         Kalshi     → (external_identifier=key_id, credential=PEM)
         Manifold   → (credential=api_key)
         Metaculus  → (credential=token)
-        Polymarket → skipped (see VERIFICATION_SKIPPED)
+        Polymarket → (external_identifier=wallet_address, credential=signature, message=signed_text)
         X/Bluesky  → skipped (stubs)
     """
     if platform in VERIFICATION_SKIPPED:
         return None
 
+    if platform is Platform.POLYMARKET:
+        if not message:
+            raise ValueError("message is required for Polymarket wallet verification")
+        return await verify_polymarket_credential(external_identifier, message, credential)
     if platform is Platform.KALSHI:
         return await verify_kalshi_credential(external_identifier, credential)
     if platform is Platform.MANIFOLD:
@@ -358,7 +360,5 @@ async def verify_upsert_credential(
     if platform is Platform.METACULUS:
         return await verify_metaculus_credential(credential)
 
-    # Defensive fallback — any platform we forgot to handle shouldn't silently
-    # pass. Mark as unverifiable rather than crashing.
     logger.warning("No upsert-verifier mapping for platform=%s; skipping", platform)
     return None
