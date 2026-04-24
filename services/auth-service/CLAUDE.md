@@ -43,7 +43,8 @@ DELETE /auth/link/{platform} # unlink platform
   - verifier returns True  → `is_verified=True`, 200
   - verifier returns False → HTTPException 400, nothing stored
   - verifier raises (network/5xx) → stored with `is_verified=False` (don't block on upstream outages)
-  - Polymarket / X / Bluesky → skipped (listed in `VERIFICATION_SKIPPED`); stored with `is_verified=False`
+  - Polymarket → 3-field EIP-191: `verify_upsert_credential(POLYMARKET, wallet_address, signature, message=signed_text)`; stored with `is_verified=True` on success
+  - X / Bluesky → skipped (listed in `VERIFICATION_SKIPPED`); stored with `is_verified=False`
 
 ## Dependencies
 - Imports from `data-layer`: `data.crud.user`, `data.models.user.User`, `data.models.linked_account.LinkedAccount`

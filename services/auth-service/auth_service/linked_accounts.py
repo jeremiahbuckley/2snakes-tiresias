@@ -25,7 +25,7 @@ from __future__ import annotations
 import base64
 import datetime
 import logging
-from typing import Awaitable, Callable, Optional, Union
+from typing import Awaitable, Callable, Union
 
 import httpx
 
@@ -321,7 +321,7 @@ VERIFICATION_SKIPPED: frozenset[Platform] = frozenset(
 
 
 async def verify_upsert_credential(
-    platform: Platform, external_identifier: str, credential: str, *, message: Optional[str] = None
+    platform: Platform, external_identifier: str, credential: str, *, message: str | None = None
 ) -> bool | None:
     """
     Unified dispatch used by ``upsert_linked_account``.
