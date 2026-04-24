@@ -12,7 +12,7 @@ Full architecture is in `README.md`.
 
 ---
 
-## Current state (as of 2026-04-14)
+## Current state (as of 2026-04-23)
 
 ### What's built and working
 - All data-layer models, migrations, CRUD (migrations 0001–0003)
@@ -25,7 +25,39 @@ Full architecture is in `README.md`.
 - User dashboard SvelteKit app
 - **Scheduler — just fully implemented this session** (see below)
 
-### What was just completed (this session)
+### What was completed since 2026-04-14 — UI work (2026-04-19 to 2026-04-23)
+
+**UI testing infrastructure (Phase 1):**
+- `tests/ui-shared/` shared package with `config.ts` (BASE_URLS + TEST_USER from `.env.test`), `fixtures.ts` (smoke + contract fixtures), `helpers/auth.ts`, `api-mocks/handlers.ts` skeleton
+- `.env.test.example` at repo root
+- `apps/user-dashboard/playwright.config.ts` (smoke only) + `playwright.contract.config.ts` (contract, starts mock API server on 8001 + SvelteKit dev on 5181)
+- `~/.claude/skills/ui-dev/SKILL.md` — superpowers skill enforcing the SOP
+
+**svelte-check type errors fixed (22 errors → 0):**
+- `dashboard/+page.server.js` and `predictions/+page.server.js`: `.getTime()` for Date arithmetic
+- `settings/+page.server.js`: JSDoc `@param` for local `api()` options
+- `lib/api.js`: JSDoc `@param` for `apiFetch()` options
+
+**Phase 2 Playwright tests:**
+- `tests/ui-shared/mock-api-server.mjs` — Node.js HTTP mock server on port 8001 serving JSON fixtures; supports `:param` wildcard route matching
+- `tests/ui-shared/api-mocks/responses/` — auth-login, auth-me, linked-accounts, share-tokens, notifications, dashboard, predictions, stats
+- Contract specs: `dashboard.spec.ts`, `predictions.spec.ts`, `settings.spec.ts`, `stats.spec.ts`, `devbypass.spec.ts`
+- Smoke spec: `tests/smoke/login.spec.ts`
+
+**DevBypass banner:**
+- `DEV_BYPASS_ENABLED=true` env var gates the bypass (was previously only gated on `NODE_ENV !== 'production'`)
+- Layout server detects `dev-mock-token` + flag → returns `isMockSession: true` + hardcoded mock user, no `/auth/me` call
+- Amber banner rendered in layout above `<slot />` when `data.isMockSession`
+- Login page button conditionally rendered via `data.devBypassEnabled` from `load()`
+
+**Live dashboard data (frontend complete, backend complete):**
+- `services/api-gateway/api_gateway/data_queries.py` — pure helpers (`_infer_outcome`, `_compute_calibration`, `_compute_brier_timeline`, `_compute_per_source`) + three async DB query functions (`get_dashboard_data`, `get_predictions`, `get_stats_data`)
+- `services/api-gateway/tests/conftest.py` — async Postgres test fixtures
+- Gateway route handlers wired to `data_queries` functions in `router.py`; router mounted in `app.py`
+- Frontend loaders (`dashboard/`, `predictions/`, `stats/+page.server.js`) replaced mock data with real API calls via `getDashboard`, `getPredictions`, `getUserStats`
+- Contract tests updated to match live data shapes
+
+### What was just completed (session ending 2026-04-14)
 The scheduler (`services/scheduler/`) was a skeleton with four `NotImplementedError` stubs. We implemented everything:
 
 **Data-layer additions** (required by scheduler):
@@ -174,13 +206,9 @@ Note: use `127.0.0.1` not `localhost`, and `?ssl=disable` — required due to Po
 
 ---
 
-## What to work on next (suggested order)
+## What to work on next
 
-1. **Run Metaculus live smoke test** — fix linked_account row (is_enabled=true, correct integer Metaculus user ID, Fernet-encrypted token), then run `python scripts/test_metaculus_live.py --user-id <uuid>` to verify predictions land in DB end-to-end
-2. **Implement notification service handlers** (email via Resend/SendGrid/Postmark)
-3. **Implement auth service credential verifiers** (`verify_kalshi_credential` etc. all raise `NotImplementedError`)
-4. **Integration tests** — wire up `tests/integration/` with a real test DB
-5. **Public leaderboard + public profile** frontend apps
+See **`FUTURE_FEATURES.md` → Immediate Next Steps** — that file is the single source of truth for the work queue and backlog.
 
 ---
 
