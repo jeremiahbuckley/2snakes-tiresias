@@ -152,7 +152,7 @@ class ProfileIn(BaseModel):
 class LinkedAccountIn(BaseModel):
     external_identifier: str = Field(max_length=256)
     credential: str = Field(description="API key, OAuth token, or app password (plaintext — encrypted server-side)")
-    message: str | None = Field(default=None, description="Message signed by the wallet (Polymarket only)")
+    message: Optional[str] = Field(default=None, description="Message signed by the wallet (Polymarket only)")
     is_enabled: bool = True
 
 
