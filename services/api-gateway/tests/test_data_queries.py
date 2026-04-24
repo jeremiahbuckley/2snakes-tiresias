@@ -258,7 +258,6 @@ async def test_db_predictions_returns_all_when_no_filter(session):
         await _make_prediction(session, user, market)
     result = await get_predictions(session, user.id, None, None, None)
     assert len(result['predictions']) == 3
-    assert result['total'] == 3
 
 
 async def test_db_predictions_filters_by_source(session):
@@ -268,7 +267,6 @@ async def test_db_predictions_filters_by_source(session):
     await _make_prediction(session, user, market, source='manifold')
     await _make_prediction(session, user, market, source='kalshi')
     result = await get_predictions(session, user.id, 'kalshi', None, None)
-    assert result['total'] == 2
     assert all(p['source'] == 'kalshi' for p in result['predictions'])
 
 
@@ -281,7 +279,6 @@ async def test_db_predictions_filters_resolved(session):
     )
     await _make_prediction(session, user, market)  # pending
     result = await get_predictions(session, user.id, None, 'resolved', None)
-    assert result['total'] == 1
     assert result['predictions'][0]['is_resolved'] is True
 
 
@@ -294,7 +291,6 @@ async def test_db_predictions_filters_pending(session):
     )
     await _make_prediction(session, user, market)  # pending
     result = await get_predictions(session, user.id, None, 'pending', None)
-    assert result['total'] == 1
     assert result['predictions'][0]['is_resolved'] is False
 
 

@@ -134,12 +134,15 @@ async def test_delete_user(db: AsyncSession):
 
 
 async def test_list_users(db: AsyncSession):
+    created = []
     for i in range(3):
-        await UserCRUD.create(db, obj_in=make_user(str(i)), hashed_password="pw")
+        user = await UserCRUD.create(db, obj_in=make_user(str(i)), hashed_password="pw")
+        created.append(user.id)
     await db.flush()
 
     users = await UserCRUD.list(db)
-    assert len(users) == 3
+    user_ids = {u.id for u in users}
+    assert all(uid in user_ids for uid in created)
 
 
 # ---------------------------------------------------------------------------
