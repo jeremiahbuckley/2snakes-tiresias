@@ -152,6 +152,7 @@ class ProfileIn(BaseModel):
 class LinkedAccountIn(BaseModel):
     external_identifier: str = Field(max_length=256)
     credential: str = Field(description="API key, OAuth token, or app password (plaintext — encrypted server-side)")
+    message: str | None = Field(default=None, description="Message signed by the wallet (Polymarket only)")
     is_enabled: bool = True
 
 
@@ -345,7 +346,7 @@ async def upsert_linked_account(
     # raise   → network/unexpected → treat as unverified, still store
     try:
         verification = await verify_upsert_credential(
-            platform, body.external_identifier, body.credential
+            platform, body.external_identifier, body.credential, message=body.message
         )
     except ValueError as exc:
         # Malformed input (empty PEM, unparseable key, etc.) — caller error.

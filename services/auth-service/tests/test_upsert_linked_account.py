@@ -132,9 +132,9 @@ async def test_skipped_verification_stores_with_is_verified_false() -> None:
     user = _make_user()
     db = _make_db(existing_account=None)
 
-    # verify_upsert_credential returns None for skipped platforms.
+    # verify_upsert_credential returns None for skipped platforms (X, Bluesky).
     with patch("auth_service.api.verify_upsert_credential", AsyncMock(return_value=None)):
-        out = await upsert_linked_account(Platform.POLYMARKET, _body(), user, db)
+        out = await upsert_linked_account(Platform.X, _body(), user, db)
 
     assert out.is_verified is False
     assert db.add.called
@@ -194,25 +194,37 @@ async def test_update_existing_account_sets_is_verified_from_verifier() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Per-platform routing — Polymarket takes the skip path even with real dispatch
+# Per-platform routing — Polymarket verified with real EIP-191 signature
 # ---------------------------------------------------------------------------
 
-async def test_polymarket_end_to_end_skips_verification() -> None:
+async def test_polymarket_end_to_end_verifies_with_three_fields() -> None:
     """
-    Exercise the real verify_upsert_credential (no mock) for Polymarket to
-    confirm VERIFICATION_SKIPPED is honoured and no exception leaks.
+    Full stack test: real verify_upsert_credential dispatch (no mock) for Polymarket.
+    Confirms a valid wallet signature produces is_verified=True.
     """
+    from eth_account import Account
+    from eth_account.messages import encode_defunct
+
+    acct = Account.create()
+    msg = "link this wallet to tiresias"
+    signed = Account.sign_message(encode_defunct(text=msg), private_key=acct.key)
+    signature = signed.signature.hex()
+
     user = _make_user()
     db = _make_db(existing_account=None)
 
-    # Don't patch verify_upsert_credential — let the real dispatch run.
     out = await upsert_linked_account(
         Platform.POLYMARKET,
-        _body(credential="0xdeadbeef", identifier="0x0000000000000000000000000000000000000001"),
+        LinkedAccountIn(
+            external_identifier=acct.address,
+            credential=signature,
+            message=msg,
+            is_enabled=True,
+        ),
         user,
         db,
     )
 
-    assert out.is_verified is False
+    assert out.is_verified is True
     assert out.platform == "polymarket"
     assert db.add.called
