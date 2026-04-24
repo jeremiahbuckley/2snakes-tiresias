@@ -336,11 +336,12 @@ async def upsert_linked_account(
     outage) → the credential is stored with ``is_verified=False`` so the user
     isn't blocked by temporary upstream issues; sync will re-verify later.
 
-    Polymarket, X, and Bluesky currently skip verification (see
+    Polymarket uses EIP-191 wallet-signature verification (``message`` field
+    required). X and Bluesky skip verification (stubs, see
     ``linked_accounts.VERIFICATION_SKIPPED``).
     """
     # --- Verify before persisting ------------------------------------------
-    # `None`  → skipped (Polymarket, social stubs)
+    # `None`  → skipped (X, Bluesky — social stubs)
     # `True`  → verified
     # `False` → platform rejected the credential → 400
     # raise   → network/unexpected → treat as unverified, still store
