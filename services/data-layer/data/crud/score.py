@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Optional, Sequence
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from data.models.prediction import Prediction
@@ -194,7 +194,7 @@ class ScoreCRUD(CRUDBase[UserScore, UserScorePublic, UserScorePublic]):
             select(
                 func.count(Prediction.id).label("total"),
                 func.sum(
-                    func.case(
+                    case(
                         (Prediction.brier_score <= 0.25, 1),
                         else_=0,
                     )
