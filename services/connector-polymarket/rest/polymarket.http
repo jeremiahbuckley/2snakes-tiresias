@@ -12,7 +12,7 @@
 
 @gammaBase = https://gamma-api.polymarket.com
 @dataBase  = https://data-api.polymarket.com
-@wallet    = 0xFf087b904c694BdC4F2710940E4BeEDDAD7Efccc
+@wallet    = YOUR_WALLET_ADDRESS
 
 # ============================================================
 # DATA API — User trades & positions
@@ -23,6 +23,17 @@
 # takerOnly: true (default) — only taker-side fills
 GET {{dataBase}}/trades?user={{wallet}}&limit=100&offset=0
 Accept: application/json
+
+### Get Trades — all trades for the wallet
+# side: BUY | SELL
+# takerOnly: true (default) — only taker-side fills
+GET {{dataBase}}/trades?limit=100&takerOnly=true&side=BUY&address=0xFf087b904c694BdC4F2710940E4BeEDDAD7Efccc
+Accept: application/json
+
+### test
+GET {{gammaBase}}/public-profile?address=0xFf087b904c694BdC4F2710940E4BeEDDAD7Efccc
+Accept: application/json
+
 
 ###
 
@@ -65,7 +76,7 @@ Accept: application/json
 ### Get Market by Slug — with tags embedded
 # Replace the slug with one from a trade/position response above
 @slug = will-there-be-a-us-government-shutdown-by-december-20-2024
-
+@slug = will-claude-5-be-released-by-april-30-2026
 GET {{gammaBase}}/markets?slug={{slug}}&include_tag=true
 Accept: application/json
 

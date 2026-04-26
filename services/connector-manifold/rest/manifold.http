@@ -13,7 +13,7 @@
 
 @baseUrl  = https://api.manifold.markets/v0
 @apiKey   = {{$dotenv MANIFOLD_API_KEY}}
-@username = jeremiahbuckley
+@username = YOUR_MANIFOLD_USERNAME
 
 # ============================================================
 # USER — run these first to get your userId, needed for market filters

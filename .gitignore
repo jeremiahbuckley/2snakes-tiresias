@@ -32,3 +32,7 @@ htmlcov/
 
 # Postgres bind-mount data directory (local dev only — back up separately)
 data/postgres/
+
+# Local REST test files — personal values (wallet address, usernames, IDs)
+# Copy service.http → service.local.http and fill in your real values there.
+*.local.http
