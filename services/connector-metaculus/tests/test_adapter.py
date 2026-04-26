@@ -110,6 +110,80 @@ SAMPLE_POST_NO_FORECASTS = {
     },
 }
 
+# The Metaculus v2 detail endpoint returns my_forecasts as:
+#   { "history": [...], "latest": {...}, "score_data": {} }
+# Each entry has forecast_values = [P(NO), P(YES)] and Unix float timestamps,
+# NOT the probability_yes / ISO-8601 fields the list endpoint used to return.
+#
+# 1735689600.0 = 2025-01-01T00:00:00Z
+# 1748736000.0 = 2025-06-01T00:00:00Z
+SAMPLE_POST_MY_FORECASTS_AS_DICT = {
+    "id": 43265,
+    "title": "Will the economy enter a recession in 2026?",
+    "status": "open",
+    "resolved": False,
+    "categories": [],
+    "question": {
+        "id": 43265,
+        "type": "binary",
+        "status": "open",
+        "resolution": None,
+        "actual_close_time": None,
+        "scheduled_close_time": "2026-12-31T23:59:59Z",
+        "actual_resolve_time": None,
+        "scheduled_resolve_time": "2027-03-01T00:00:00Z",
+        "my_forecasts": {
+            "history": [
+                {
+                    "question_id": 43265,
+                    "author_id": 300060,
+                    "start_time": 1735689600.0,   # 2025-01-01T00:00:00Z
+                    "end_time": 1748736000.0,
+                    "forecast_values": [0.45, 0.55],  # [P(NO), P(YES)]
+                },
+                {
+                    "question_id": 43265,
+                    "author_id": 300060,
+                    "start_time": 1748736000.0,   # 2025-06-01T00:00:00Z
+                    "end_time": 1777777600.0,
+                    "forecast_values": [0.37, 0.63],
+                },
+            ],
+            "latest": {
+                "question_id": 43265,
+                "author_id": 300060,
+                "start_time": 1748736000.0,       # 2025-06-01T00:00:00Z
+                "end_time": 1777777600.0,
+                "forecast_values": [0.37, 0.63],
+            },
+            "score_data": {},
+        },
+    },
+}
+
+SAMPLE_POST_MY_FORECASTS_AS_EMPTY_DICT = {
+    "id": 43266,
+    "title": "Another question",
+    "status": "open",
+    "resolved": False,
+    "categories": [],
+    "question": {
+        "id": 43266,
+        "type": "binary",
+        "status": "open",
+        "resolution": None,
+        "actual_close_time": None,
+        "scheduled_close_time": "2026-12-31T23:59:59Z",
+        "actual_resolve_time": None,
+        "scheduled_resolve_time": "2027-03-01T00:00:00Z",
+        "my_forecasts": {
+            "history": [],
+            "latest": None,
+            "score_data": {},
+        },
+    },
+}
+
 
 # ---------------------------------------------------------------------------
 # normalise_market
@@ -222,5 +296,38 @@ def test_normalise_forecast_placed_at():
 def test_normalise_forecast_no_forecasts_returns_none_probability():
     """Edge case: my_forecasts is empty → probability is None (not an error)."""
     f = normalise_forecast(SAMPLE_POST_NO_FORECASTS, user_id="user-4")
+    assert f["predicted_probability"] is None
+    assert f["placed_at"] is None
+
+
+# ---------------------------------------------------------------------------
+# normalise_forecast — my_forecasts dict (Metaculus detail endpoint format)
+# ---------------------------------------------------------------------------
+
+def test_normalise_forecast_my_forecasts_as_dict_probability():
+    """Detail endpoint: probability comes from latest.forecast_values[1] (P(YES))."""
+    f = normalise_forecast(SAMPLE_POST_MY_FORECASTS_AS_DICT, user_id="user-7")
+    assert f["predicted_probability"] == pytest.approx(0.63)
+
+
+def test_normalise_forecast_my_forecasts_as_dict_placed_at():
+    """placed_at comes from latest.start_time which is a Unix float, not ISO-8601."""
+    f = normalise_forecast(SAMPLE_POST_MY_FORECASTS_AS_DICT, user_id="user-7")
+    assert f["placed_at"] is not None
+    assert f["placed_at"].year == 2025
+    assert f["placed_at"].month == 6
+
+
+def test_normalise_forecast_my_forecasts_as_dict_fields():
+    """Other fields are unaffected when my_forecasts is a dict."""
+    f = normalise_forecast(SAMPLE_POST_MY_FORECASTS_AS_DICT, user_id="user-7")
+    assert f["source"] == "metaculus"
+    assert f["market_external_id"] == "43265"
+    assert "user-7" in f["external_id"]
+
+
+def test_normalise_forecast_my_forecasts_empty_dict_returns_none():
+    """Empty results list inside dict → probability is None (not an error)."""
+    f = normalise_forecast(SAMPLE_POST_MY_FORECASTS_AS_EMPTY_DICT, user_id="user-7")
     assert f["predicted_probability"] is None
     assert f["placed_at"] is None

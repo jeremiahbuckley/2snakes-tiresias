@@ -281,30 +281,28 @@ async def _sync_metaculus(db: AsyncSession, account: LinkedAccount) -> int:
     client = MetaculusClient(token=token)
     raw_posts = await client.get_user_posts(metaculus_user_id)
 
-    # Only binary questions are handled in v1
-    forecasts = []
-    for post in raw_posts:
-        question = post.get("question") or {}
-        if question.get("type") == "binary":
-            forecasts.append(normalise_forecast(post, user_id))
+    # Identify binary post IDs. The list endpoint does not include my_forecasts
+    # (a Metaculus API quirk), so we use these IDs only for discovery and fetch
+    # each post individually below — the detail endpoint includes my_forecasts.
+    binary_post_ids = [
+        post["id"]
+        for post in raw_posts
+        if (post.get("question") or {}).get("type") == "binary" and post.get("id")
+    ]
 
-    # Collect unique post IDs
-    post_ids = {
-        int(f["market_external_id"])
-        for f in forecasts
-        if f.get("market_external_id")
-    }
-
-    # Upsert markets
+    # Fetch each binary post individually. The detail endpoint returns my_forecasts,
+    # which the list endpoint omits. Use the same response for both market and forecast.
     market_id_map: dict[str, UUID] = {}  # str(post_id) -> internal Market.id
-    for post_id in post_ids:
+    forecasts = []
+    for post_id in binary_post_ids:
         try:
             raw_post = await client.get_post(post_id)
             market_norm = normalise_market(raw_post)
             market = await MarketCRUD.upsert_from_sync(db, normalized=market_norm)
             market_id_map[str(post_id)] = market.id
+            forecasts.append(normalise_forecast(raw_post, user_id))
         except Exception as exc:
-            logger.warning("Failed to sync Metaculus market %s: %s", post_id, exc)
+            logger.warning("Failed to sync Metaculus post %s: %s", post_id, exc, exc_info=True)
 
     # Upsert predictions
     count = 0

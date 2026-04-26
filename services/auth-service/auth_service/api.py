@@ -27,7 +27,11 @@ Notification-preference endpoint:
 
 from __future__ import annotations
 
+import logging
+import os
 import uuid
+
+logger = logging.getLogger(__name__)
 from typing import Annotated, Optional
 
 import bcrypt
@@ -44,10 +48,20 @@ from data.models.share_token import ShareToken, generate_token
 from data.models.user import User
 
 from .jwt import create_access_token, decode_access_token
-from .linked_accounts import Platform, verify_upsert_credential  # re-export for pydantic validators
+from .linked_accounts import Platform, verify_upsert_credential, resolve_metaculus_external_identifier  # noqa: F401
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 bearer = HTTPBearer()
+
+
+def _encrypt_credential(plaintext: str) -> str:
+    key = os.environ.get("CREDENTIAL_ENCRYPTION_KEY", "")
+    if not key:
+        raise RuntimeError(
+            "CREDENTIAL_ENCRYPTION_KEY is not set — cannot encrypt credential"
+        )
+    from cryptography.fernet import Fernet
+    return Fernet(key.encode()).encrypt(plaintext.encode()).decode()
 
 # ---------------------------------------------------------------------------
 # Shorthand type aliases
@@ -371,6 +385,22 @@ async def upsert_linked_account(
 
     is_verified_now = verification is True
 
+    # --- Resolve external_identifier ---------------------------------------
+    # For Metaculus, users naturally enter their username, but the scheduler
+    # needs the numeric user ID to query forecasts. Resolve it from the API
+    # when verification succeeded; fall back to the provided value on error.
+    external_identifier = body.external_identifier
+    if platform is Platform.METACULUS and is_verified_now:
+        try:
+            external_identifier = await resolve_metaculus_external_identifier(body.credential)
+        except Exception as exc:
+            logger.warning(
+                "Could not resolve Metaculus user ID from API (%s) — "
+                "storing provided external_identifier %r instead",
+                exc,
+                body.external_identifier,
+            )
+
     # --- Persist -----------------------------------------------------------
     result = await db.execute(
         select(LinkedAccount).where(
@@ -380,22 +410,21 @@ async def upsert_linked_account(
     )
     account = result.scalar_one_or_none()
 
-    # TODO: encrypt body.credential before storing
-    encrypted_credential = body.credential  # placeholder — swap for Fernet encrypt()
+    encrypted_credential = _encrypt_credential(body.credential)
 
     if account is None:
         account = LinkedAccount(
             user_id=current_user.id,
             platform=platform.value,
             platform_type=platform_type(platform).value,
-            external_identifier=body.external_identifier,
+            external_identifier=external_identifier,
             credential_encrypted=encrypted_credential,
             is_enabled=body.is_enabled,
             is_verified=is_verified_now,
         )
         db.add(account)
     else:
-        account.external_identifier = body.external_identifier
+        account.external_identifier = external_identifier
         account.credential_encrypted = encrypted_credential
         account.is_enabled = body.is_enabled
         account.is_verified = is_verified_now

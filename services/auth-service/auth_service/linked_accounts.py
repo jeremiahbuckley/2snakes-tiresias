@@ -265,6 +265,36 @@ async def verify_metaculus_credential(token: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Metaculus — resolve username to numeric user ID
+# ---------------------------------------------------------------------------
+
+async def resolve_metaculus_external_identifier(token: str) -> str:
+    """
+    Return the authenticated user's numeric Metaculus user ID as a string.
+
+    Calling /api/users/me/ with the user's token returns their profile, which
+    includes their integer ``id``. We store this as ``external_identifier``
+    rather than whatever the user typed (often a username), because
+    ``_sync_metaculus`` in the scheduler needs the numeric ID to query forecasts.
+
+    Raises:
+        httpx.HTTPError — network failure or unexpected response.
+        KeyError        — response did not contain an ``id`` field.
+        ValueError      — token is empty.
+    """
+    if not token:
+        raise ValueError("Metaculus token is required")
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(
+            f"{_METACULUS_API_BASE}/api/users/me/",
+            headers={"Authorization": f"Token {token}"},
+        )
+        resp.raise_for_status()
+        return str(resp.json()["id"])
+
+
+# ---------------------------------------------------------------------------
 # Social platforms — still stubs. Tracked in FUTURE_FEATURES.md.
 # ---------------------------------------------------------------------------
 

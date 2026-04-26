@@ -20,6 +20,7 @@ Rate limits: not documented explicitly; ~60 req/min is a safe default.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from typing import Any
@@ -33,6 +34,14 @@ METACULUS_TOKEN = os.environ.get("METACULUS_TOKEN", "")
 
 # Page size for list requests. Metaculus allows up to 100.
 _PAGE_LIMIT = 100
+
+# Delay between paginated requests. Metaculus rate-limits at ~60 req/min;
+# 1 second between pages keeps us well inside that budget.
+_PAGE_DELAY = 1.0
+
+# How long to wait after a 429 before retrying the same page. One minute
+# gives the Metaculus rate-limit window time to reset.
+_RATE_LIMIT_DELAY = 60.0
 
 
 class MetaculusClient:
@@ -77,20 +86,35 @@ class MetaculusClient:
             )
             resp.raise_for_status()
             body = resp.json()
-            all_results.extend(body.get("results", []))
+            page_results = body.get("results", [])
+            all_results.extend(page_results)
 
             total = body.get("count", 0)
-            logger.debug(
-                "Metaculus get_user_posts: fetched page 1, %d/%d posts",
-                len(all_results),
+            logger.info(
+                "Metaculus get_user_posts: forecaster_id=%s total=%d (fetched %d so far)",
+                metaculus_user_id,
                 total,
+                len(all_results),
             )
 
-            # Follow `next` links until exhausted
-            next_url: str | None = body.get("next")
+            # The Metaculus API returns count=0 for forecaster_id-filtered requests
+            # (a known API bug) but still provides a `next` URL pointing into the
+            # unfiltered public feed. Guard against this by only following `next`
+            # when the current page was full — a partial page means we've received
+            # all results in the filtered set regardless of what `next` says.
+            next_url: str | None = body.get("next") if len(page_results) >= _PAGE_LIMIT else None
             page = 2
             while next_url:
+                await asyncio.sleep(_PAGE_DELAY)
                 resp = await client.get(next_url)
+                if resp.status_code == 429:
+                    logger.warning(
+                        "Metaculus rate limited (429) on page %d; waiting %ds then retrying",
+                        page,
+                        _RATE_LIMIT_DELAY,
+                    )
+                    await asyncio.sleep(_RATE_LIMIT_DELAY)
+                    resp = await client.get(next_url)
                 resp.raise_for_status()
                 body = resp.json()
                 page_results = body.get("results", [])
@@ -101,7 +125,7 @@ class MetaculusClient:
                     len(all_results),
                     total,
                 )
-                next_url = body.get("next")
+                next_url = body.get("next") if len(page_results) >= _PAGE_LIMIT else None
                 page += 1
 
         return all_results

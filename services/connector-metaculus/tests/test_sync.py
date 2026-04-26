@@ -330,23 +330,26 @@ class TestPagination:
 
     @pytest.mark.asyncio
     async def test_client_get_user_posts_follows_next_links(self):
-        """MetaculusClient.get_user_posts follows `next` URLs until exhausted."""
-        import json
+        """MetaculusClient.get_user_posts follows `next` URLs until exhausted.
 
+        A full first page (100 results) triggers pagination; a partial second
+        page (fewer than 100) signals the end regardless of `next`.
+        """
+        # Page 1: full page of 100 identical posts → client must fetch page 2
         page1_body = {
-            "count": 2,
+            "count": 101,
             "next": "https://www.metaculus.com/api/posts/?forecaster_id=5&limit=100&offset=100",
             "previous": None,
-            "results": [BINARY_POST_RESOLVED],
+            "results": [BINARY_POST_RESOLVED] * 100,
         }
+        # Page 2: 1 post → partial page signals end of results
         page2_body = {
-            "count": 2,
+            "count": 101,
             "next": None,
             "previous": "https://www.metaculus.com/api/posts/?forecaster_id=5&limit=100",
             "results": [BINARY_POST_OPEN],
         }
 
-        # Mock the httpx.AsyncClient at the module level to avoid the sandbox SOCKS proxy
         call_count = 0
         pages = [page1_body, page2_body]
 
@@ -369,10 +372,10 @@ class TestPagination:
             client = MetaculusClient(token="test-token")
             results = await client.get_user_posts(5)
 
-        assert len(results) == 2
-        assert call_count == 2   # two HTTP calls made
+        assert call_count == 2
+        assert len(results) == 101
         assert results[0]["id"] == BINARY_POST_RESOLVED["id"]
-        assert results[1]["id"] == BINARY_POST_OPEN["id"]
+        assert results[-1]["id"] == BINARY_POST_OPEN["id"]
 
     @pytest.mark.asyncio
     async def test_client_single_page_makes_one_request(self):
@@ -407,6 +410,164 @@ class TestPagination:
 
         assert call_count == 1
         assert len(results) == 1
+
+    @pytest.mark.asyncio
+    async def test_client_sleeps_between_pages_to_respect_rate_limit(self):
+        """A delay must be inserted between page requests to avoid 429 responses."""
+        import asyncio
+
+        # Page 1 must be full (100 results) so the client knows to fetch page 2
+        page1_body = {
+            "count": 101,
+            "next": "https://www.metaculus.com/api/posts/?forecaster_id=5&limit=100&offset=100",
+            "previous": None,
+            "results": [BINARY_POST_RESOLVED] * 100,
+        }
+        page2_body = {
+            "count": 101,
+            "next": None,
+            "previous": None,
+            "results": [BINARY_POST_OPEN],
+        }
+
+        pages = [page1_body, page2_body]
+        call_count = 0
+
+        async def mock_get(url, **kwargs):
+            nonlocal call_count
+            mock_resp = MagicMock()
+            mock_resp.raise_for_status = MagicMock()
+            mock_resp.json = MagicMock(return_value=pages[call_count])
+            call_count += 1
+            return mock_resp
+
+        mock_http_instance = AsyncMock()
+        mock_http_instance.get = mock_get
+        mock_http_instance.__aenter__ = AsyncMock(return_value=mock_http_instance)
+        mock_http_instance.__aexit__ = AsyncMock(return_value=False)
+        mock_http_cls = MagicMock(return_value=mock_http_instance)
+
+        sleep_calls: list[float] = []
+
+        async def capture_sleep(seconds: float) -> None:
+            sleep_calls.append(seconds)
+
+        with (
+            patch("connector_metaculus.client.httpx.AsyncClient", mock_http_cls),
+            patch("connector_metaculus.client.asyncio.sleep", capture_sleep),
+        ):
+            from connector_metaculus.client import MetaculusClient
+            client = MetaculusClient(token="test-token")
+            await client.get_user_posts(5)
+
+        # One sleep between the two pages (not before page 1)
+        assert len(sleep_calls) == 1
+        assert sleep_calls[0] > 0
+
+    @pytest.mark.asyncio
+    async def test_client_stops_when_results_fewer_than_limit(self):
+        """If the API returns count=0 but a `next` URL (Metaculus bug), stop when
+        the result count is below the page limit rather than following next forever."""
+        page1_body = {
+            "count": 0,   # Metaculus API bug: count=0 even though results exist
+            "next": "https://www.metaculus.com/api/posts/?forecaster_id=300060&limit=100&offset=100",
+            "previous": None,
+            "results": [BINARY_POST_RESOLVED, BINARY_POST_OPEN],  # 2 < 100 (limit)
+        }
+
+        call_count = 0
+
+        async def mock_get(url, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            mock_resp = MagicMock()
+            mock_resp.raise_for_status = MagicMock()
+            mock_resp.json = MagicMock(return_value=page1_body)
+            return mock_resp
+
+        mock_http_instance = AsyncMock()
+        mock_http_instance.get = mock_get
+        mock_http_instance.__aenter__ = AsyncMock(return_value=mock_http_instance)
+        mock_http_instance.__aexit__ = AsyncMock(return_value=False)
+        mock_http_cls = MagicMock(return_value=mock_http_instance)
+
+        with patch("connector_metaculus.client.httpx.AsyncClient", mock_http_cls):
+            from connector_metaculus.client import MetaculusClient
+            client = MetaculusClient(token="test-token")
+            results = await client.get_user_posts(300060)
+
+        # Should stop after one page despite `next` being present
+        assert call_count == 1
+        assert len(results) == 2
+
+    @pytest.mark.asyncio
+    async def test_client_retries_page_once_on_429(self):
+        """A 429 response triggers a wait and single retry; pagination continues on success."""
+        # Page 1 must be full (100 results) so the client knows to fetch page 2
+        page1_body = {
+            "count": 101,
+            "next": "https://www.metaculus.com/api/posts/?forecaster_id=5&limit=100&offset=100",
+            "previous": None,
+            "results": [BINARY_POST_RESOLVED] * 100,
+        }
+        page2_body = {
+            "count": 101,
+            "next": None,
+            "previous": None,
+            "results": [BINARY_POST_OPEN],
+        }
+
+        import httpx as _httpx
+
+        call_count = 0
+        sleep_calls: list[float] = []
+
+        async def mock_get(url, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            mock_resp = MagicMock()
+            if call_count == 1:
+                mock_resp.status_code = 200
+                mock_resp.raise_for_status = MagicMock()
+                mock_resp.json = MagicMock(return_value=page1_body)
+            elif call_count == 2:
+                # First attempt at page 2: real 429 — raise_for_status raises like httpx would
+                mock_resp.status_code = 429
+                req = _httpx.Request("GET", url if isinstance(url, str) else "https://example.com/")
+                mock_resp.raise_for_status = MagicMock(
+                    side_effect=_httpx.HTTPStatusError(
+                        "429 Too Many Requests", request=req, response=mock_resp
+                    )
+                )
+            else:
+                # Retry of page 2: success
+                mock_resp.status_code = 200
+                mock_resp.raise_for_status = MagicMock()
+                mock_resp.json = MagicMock(return_value=page2_body)
+            return mock_resp
+
+        async def capture_sleep(seconds: float) -> None:
+            sleep_calls.append(seconds)
+
+        mock_http_instance = AsyncMock()
+        mock_http_instance.get = mock_get
+        mock_http_instance.__aenter__ = AsyncMock(return_value=mock_http_instance)
+        mock_http_instance.__aexit__ = AsyncMock(return_value=False)
+        mock_http_cls = MagicMock(return_value=mock_http_instance)
+
+        with (
+            patch("connector_metaculus.client.httpx.AsyncClient", mock_http_cls),
+            patch("connector_metaculus.client.asyncio.sleep", capture_sleep),
+        ):
+            from connector_metaculus.client import MetaculusClient
+            client = MetaculusClient(token="test-token")
+            results = await client.get_user_posts(5)
+
+        # Both pages' posts are returned despite the 429 on the first attempt
+        assert len(results) == 101   # 100 from page1 + 1 from page2
+        assert call_count == 3   # page1, page2-429, page2-retry
+        # The retry delay must be longer than the normal page-to-page delay
+        assert any(s >= 60 for s in sleep_calls), f"Expected a >=60s retry sleep; got {sleep_calls}"
 
     @pytest.mark.asyncio
     async def test_client_empty_results_returns_empty_list(self):

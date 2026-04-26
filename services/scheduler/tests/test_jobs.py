@@ -562,6 +562,38 @@ class TestSyncManifold:
         assert result == 0
 
     @pytest.mark.asyncio
+    async def test_uses_per_user_api_key_not_env_var(self):
+        """The decrypted API key is passed directly to ManifoldClient, not via env var."""
+        user_id = make_uuid()
+        acct = make_linked_account(
+            platform="manifold",
+            external_identifier="alice",
+            credential="fernet-ciphertext",
+            user_id=user_id,
+        )
+        db = AsyncMock()
+        captured_key: list[str] = []
+
+        def capture_client_init(self, api_key: str = "") -> None:
+            captured_key.append(api_key)
+            self._base = "https://api.manifold.markets/v0"
+            self._headers = {"Authorization": f"Key {api_key}"} if api_key else {}
+
+        with (
+            patch("scheduler.sync.decrypt_credential", return_value="decrypted-api-key"),
+            patch("connector_manifold.client.ManifoldClient.__init__", capture_client_init),
+            patch(
+                "connector_manifold.client.ManifoldClient.get_user_bets",
+                new_callable=AsyncMock,
+                return_value=[],
+            ),
+        ):
+            from scheduler.sync import _sync_manifold
+            await _sync_manifold(db, acct)
+
+        assert captured_key == ["decrypted-api-key"]
+
+    @pytest.mark.asyncio
     async def test_upserts_markets_and_predictions(self):
         user_id = make_uuid()
         acct = make_linked_account(

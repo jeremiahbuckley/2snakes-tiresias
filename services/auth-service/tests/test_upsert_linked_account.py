@@ -16,6 +16,7 @@ selects a specific verifier outcome.
 from __future__ import annotations
 
 import datetime
+import os
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -25,6 +26,14 @@ from fastapi import HTTPException
 
 from auth_service.api import LinkedAccountIn, upsert_linked_account
 from data.models.linked_account import Platform
+
+# A valid Fernet key for tests — must be set before api.py imports run.
+_TEST_FERNET_KEY = "xwxGMFCEr6jQ3wGUUv3i4hCYPq2G4b7NNjl9rcKWQv8="
+
+
+@pytest.fixture(autouse=True)
+def set_encryption_key(monkeypatch):
+    monkeypatch.setenv("CREDENTIAL_ENCRYPTION_KEY", _TEST_FERNET_KEY)
 
 
 # ---------------------------------------------------------------------------
@@ -187,10 +196,63 @@ async def test_update_existing_account_sets_is_verified_from_verifier() -> None:
     # Existing row mutated in place — no new add().
     assert not db.add.called
     assert existing.external_identifier == "new-id"
-    assert existing.credential_encrypted == "new-key"
+    assert existing.credential_encrypted != "new-key"  # stored encrypted, not plaintext
+    assert existing.credential_encrypted != "old-cred"  # updated from the old value
     assert existing.is_enabled is True
     assert existing.is_verified is True  # verifier promoted it
     assert out.is_verified is True
+
+
+# ---------------------------------------------------------------------------
+# Metaculus — external_identifier auto-resolved to numeric user ID
+# ---------------------------------------------------------------------------
+
+async def test_metaculus_external_identifier_resolved_to_numeric_id() -> None:
+    """Linking Metaculus with a username should store the numeric user ID instead."""
+    user = _make_user()
+    db = _make_db(existing_account=None)
+
+    with (
+        patch("auth_service.api.verify_upsert_credential", AsyncMock(return_value=True)),
+        patch(
+            "auth_service.api.resolve_metaculus_external_identifier",
+            AsyncMock(return_value="98765"),
+        ),
+    ):
+        out = await upsert_linked_account(
+            Platform.METACULUS,
+            _body(identifier="jeremiahbuckley"),
+            user,
+            db,
+        )
+
+    assert out.external_identifier == "98765"
+    assert out.is_verified is True
+    assert db.add.called
+
+
+async def test_metaculus_external_identifier_falls_back_on_resolve_error() -> None:
+    """If the ID-resolution call fails, fall back to whatever the user provided."""
+    user = _make_user()
+    db = _make_db(existing_account=None)
+
+    with (
+        patch("auth_service.api.verify_upsert_credential", AsyncMock(return_value=True)),
+        patch(
+            "auth_service.api.resolve_metaculus_external_identifier",
+            AsyncMock(side_effect=Exception("network error")),
+        ),
+    ):
+        out = await upsert_linked_account(
+            Platform.METACULUS,
+            _body(identifier="jeremiahbuckley"),
+            user,
+            db,
+        )
+
+    assert out.external_identifier == "jeremiahbuckley"
+    assert out.is_verified is True
+    assert db.add.called
 
 
 # ---------------------------------------------------------------------------

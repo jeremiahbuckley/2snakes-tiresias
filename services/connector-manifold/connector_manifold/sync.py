@@ -20,13 +20,16 @@ from .adapter import normalise_bet, normalise_market
 from .client import ManifoldClient
 
 
-async def sync_user_bets(user_id: str, manifold_username: str) -> list[dict]:
+async def sync_user_bets(user_id: str, manifold_username: str, api_key: str = "") -> list[dict]:
     """Fetch a user's Manifold bet history and return normalised bets.
 
     Redemption bets (isRedemption == True) are excluded — they are automated
     resolution events, not user-placed predictions.
+
+    Args:
+        api_key: Decrypted Manifold API key for the user. Omit for public data only.
     """
-    client = ManifoldClient()
+    client = ManifoldClient(api_key=api_key)
     raw = await client.get_user_bets(manifold_username)
     return [
         normalise_bet(b, user_id)

@@ -96,7 +96,7 @@ class Market(TimestampMixin, Base):
         doc="Actual timestamp the market was resolved.",
     )
     outcome: Mapped[Optional[MarketOutcome]] = mapped_column(
-        Enum(MarketOutcome, name="market_outcome"),
+        Enum(MarketOutcome, name="market_outcome", values_callable=lambda obj: [e.value for e in obj]),
         nullable=True,
         doc="NULL means unresolved.",
     )
