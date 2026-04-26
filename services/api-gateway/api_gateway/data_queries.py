@@ -176,6 +176,13 @@ async def get_dashboard_data(session: AsyncSession, user_id: UUID) -> dict:
     )
     resolved = resolved_result.scalars().all()
 
+    # Count total predictions directly — UserScore.total_predictions only updates
+    # after market resolutions, so it reads 0 for users with only pending predictions.
+    total_pred_result = await session.execute(
+        select(func.count(Prediction.id)).where(Prediction.user_id == user_id)
+    )
+    total_pred_count = total_pred_result.scalar_one()
+
     badge_ids = (score.badge_ids or []) if score else []
     badges = [
         {
@@ -188,6 +195,9 @@ async def get_dashboard_data(session: AsyncSession, user_id: UUID) -> dict:
         if b in BADGE_CATALOG
     ]
 
+    score_data = _score_dict(score, _compute_per_source(resolved))
+    score_data['total_predictions'] = total_pred_count
+
     return {
         'user': {
             'id': str(user.id),
@@ -198,7 +208,7 @@ async def get_dashboard_data(session: AsyncSession, user_id: UUID) -> dict:
             'avatar_url': user.avatar_url,
             'social_links': user.social_links or {},
         },
-        'score': _score_dict(score, _compute_per_source(resolved)),
+        'score': score_data,
         'badges': badges,
         'recent_predictions': [_pred_dict(p) for p in recent],
     }
@@ -220,11 +230,6 @@ async def get_predictions(
     elif status == 'pending':
         base = base.where(Prediction.brier_score.is_(None))
 
-    count_result = await session.execute(
-        select(func.count()).select_from(base.subquery())
-    )
-    total = count_result.scalar_one()
-
     if sort in ('brier_asc', 'brier_score'):
         base = base.order_by(Prediction.brier_score.asc().nulls_last())
     elif sort == 'brier_desc':
@@ -238,15 +243,28 @@ async def get_predictions(
     pred_result = await session.execute(paged)
     predictions = pred_result.scalars().all()
 
-    score_result = await session.execute(select(UserScore).where(UserScore.user_id == user_id))
-    score = score_result.scalar_one_or_none()
+    # Count totals directly from prediction rows — UserScore.total_predictions is only
+    # updated by the scoring engine (requires market resolutions), so it reads 0 for
+    # new users with pending predictions.
+    total_all_result = await session.execute(
+        select(func.count(Prediction.id)).where(Prediction.user_id == user_id)
+    )
+    total_all = total_all_result.scalar_one()
+
+    total_resolved_result = await session.execute(
+        select(func.count(Prediction.id)).where(
+            Prediction.user_id == user_id,
+            Prediction.brier_score.is_not(None),
+        )
+    )
+    total_resolved = total_resolved_result.scalar_one()
 
     return {
         'predictions': [_pred_dict(p) for p in predictions],
         'totals': {
-            'all': score.total_predictions if score else 0,
-            'resolved': score.resolved_predictions if score else 0,
-            'pending': (score.total_predictions - score.resolved_predictions) if score else 0,
+            'all': total_all,
+            'resolved': total_resolved,
+            'pending': total_all - total_resolved,
         },
     }
 

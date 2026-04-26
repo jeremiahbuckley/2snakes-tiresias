@@ -1,11 +1,23 @@
 <script>
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { navigating } from '$app/stores';
 
   /** @type {import('./$types').PageData} */
   export let data;
 
-  const { predictions, filters, totals } = data;
+  // Reactive — re-evaluated whenever SvelteKit updates data after goto() navigation.
+  // Using const here was the filter bug: const destructuring captures values once at
+  // component mount and never updates when the data prop changes.
+  $: predictions = data.predictions;
+  $: totals = data.totals;
+
+  // Keep filter UI in sync with the current URL state after navigation.
+  let sourceFilter = data.filters.sourceFilter;
+  let statusFilter = data.filters.statusFilter;
+  let sortBy = data.filters.sortBy;
+  $: sourceFilter = data.filters.sourceFilter;
+  $: statusFilter = data.filters.statusFilter;
+  $: sortBy = data.filters.sortBy;
 
   const sources = ['all', 'kalshi', 'polymarket', 'manifold', 'metaculus'];
 
@@ -15,10 +27,6 @@
     { value: 'brier_asc', label: 'Best score first' },
     { value: 'brier_desc', label: 'Worst score first' },
   ];
-
-  let sourceFilter = filters.sourceFilter;
-  let statusFilter = filters.statusFilter;
-  let sortBy = filters.sortBy;
 
   function applyFilters() {
     const params = new URLSearchParams();
@@ -53,7 +61,6 @@
     return platformColors[source] ?? '#aaa';
   }
 
-  // Score quality indicator
   function scoreClass(bs) {
     if (bs == null) return '';
     if (bs < 0.1) return 'score-great';
@@ -70,7 +77,9 @@
 <div class="page-header">
   <div>
     <h1>Predictions</h1>
-    <p class="subtitle">{totals.resolved} resolved · {totals.pending} pending · {totals.all} total</p>
+    <p class="subtitle">
+      {totals.resolved} resolved · {totals.pending} pending · {totals.all} total
+    </p>
   </div>
 </div>
 
@@ -111,7 +120,7 @@
 </div>
 
 <!-- Table -->
-<div class="card">
+<div class="card" class:loading={$navigating}>
   {#if predictions.length === 0}
     <div class="empty-state">
       <span class="empty-icon">📭</span>
@@ -251,6 +260,12 @@
     padding: 0;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07);
     overflow: hidden;
+    transition: opacity 0.15s;
+  }
+
+  .card.loading {
+    opacity: 0.55;
+    pointer-events: none;
   }
 
   .table {

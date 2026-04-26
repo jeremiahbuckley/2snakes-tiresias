@@ -24,6 +24,9 @@
     ? ((score.resolved_predictions / score.total_predictions) * 100).toFixed(0)
     : 0;
 
+  // True when no market has resolved yet — scores are null
+  const noScoringData = score.mean_brier_score == null;
+
   const platformColors = {
     kalshi: '#00b894',
     polymarket: '#6c5ce7',
@@ -34,6 +37,8 @@
   function sourceColor(source) {
     return platformColors[source] ?? '#aaa';
   }
+
+  const perSource = Object.entries(score.per_source ?? {});
 </script>
 
 <svelte:head>
@@ -45,9 +50,9 @@
     <h1>Dashboard</h1>
     <p class="welcome">Welcome back, {user.display_name ?? user.username}</p>
   </div>
-  <div class="last-scored">
-    Last scored: {fmtDate(score.last_scored_at)}
-  </div>
+  {#if score.last_scored_at}
+    <div class="last-scored">Last scored: {fmtDate(score.last_scored_at)}</div>
+  {/if}
 </div>
 
 <!-- Score Summary Cards -->
@@ -69,51 +74,82 @@
   </div>
   <div class="card stat-card">
     <div class="stat-label">Predictions</div>
-    <div class="stat-value">{score.resolved_predictions}
+    <div class="stat-value">
+      {score.resolved_predictions}
       <span class="stat-denom">/ {score.total_predictions}</span>
     </div>
     <div class="stat-sub">{resolutionRate}% resolved</div>
   </div>
 </section>
 
-<!-- Platform Breakdown -->
-<section class="row-section">
-  <div class="card platform-card">
-    <h2 class="section-title">Platform Breakdown</h2>
-    <div class="platform-list">
-      {#each Object.entries(score.per_source) as [platform, brierMean]}
-        <div class="platform-row">
-          <span class="platform-badge" style="background:{sourceColor(platform)}20;color:{sourceColor(platform)}">
-            {platform}
-          </span>
-          <div class="platform-bar-wrap">
-            <div class="platform-bar" style="width:{Math.round((1 - brierMean) * 100)}%;background:{sourceColor(platform)}"></div>
-          </div>
-          <span class="platform-score">{fmt(brierMean)}</span>
-        </div>
-      {/each}
+<!-- Pending-data notice when no markets have resolved yet -->
+{#if noScoringData && score.total_predictions > 0}
+  <div class="pending-notice">
+    <span class="pending-icon">⏳</span>
+    <div>
+      <strong>{score.total_predictions} prediction{score.total_predictions !== 1 ? 's' : ''} being tracked</strong>
+      — Brier scores, calibration, and platform breakdown will appear as your predicted markets resolve.
     </div>
   </div>
+{:else if score.total_predictions === 0}
+  <div class="pending-notice">
+    <span class="pending-icon">📡</span>
+    <div>
+      <strong>No predictions yet</strong>
+      — Link a forecasting platform in <a href="/settings">Settings</a> to start tracking your predictions.
+    </div>
+  </div>
+{/if}
 
-  <!-- Badges -->
-  <div class="card badge-card">
-    <h2 class="section-title">Badges <span class="badge-count">{earnedBadges.length}/{badges.length}</span></h2>
-    <div class="badge-grid">
-      {#each earnedBadges as badge}
-        <div class="badge badge-earned" title={badge.description}>
-          <span class="badge-icon">{badge.icon}</span>
-          <span class="badge-name">{badge.name}</span>
+<!-- Platform Breakdown + Badges (only show when there's data to display) -->
+{#if perSource.length > 0 || earnedBadges.length > 0 || lockedBadges.length > 0}
+  <section class="row-section">
+    <!-- Platform Breakdown -->
+    <div class="card platform-card">
+      <h2 class="section-title">Platform Breakdown</h2>
+      {#if perSource.length > 0}
+        <div class="platform-list">
+          {#each perSource as [platform, brierMean]}
+            <div class="platform-row">
+              <span class="platform-badge" style="background:{sourceColor(platform)}20;color:{sourceColor(platform)}">
+                {platform}
+              </span>
+              <div class="platform-bar-wrap">
+                <div class="platform-bar" style="width:{Math.round((1 - brierMean) * 100)}%;background:{sourceColor(platform)}"></div>
+              </div>
+              <span class="platform-score">{fmt(brierMean)}</span>
+            </div>
+          {/each}
         </div>
-      {/each}
-      {#each lockedBadges as badge}
-        <div class="badge badge-locked" title={badge.description}>
-          <span class="badge-icon">🔒</span>
-          <span class="badge-name">{badge.name}</span>
-        </div>
-      {/each}
+      {:else}
+        <p class="section-empty">Appears after your first market resolves.</p>
+      {/if}
     </div>
-  </div>
-</section>
+
+    <!-- Badges -->
+    <div class="card badge-card">
+      <h2 class="section-title">Badges <span class="badge-count">{earnedBadges.length}/{badges.length}</span></h2>
+      {#if badges.length > 0}
+        <div class="badge-grid">
+          {#each earnedBadges as badge}
+            <div class="badge badge-earned" title={badge.description}>
+              <span class="badge-icon">{badge.icon}</span>
+              <span class="badge-name">{badge.name}</span>
+            </div>
+          {/each}
+          {#each lockedBadges as badge}
+            <div class="badge badge-locked" title={badge.description}>
+              <span class="badge-icon">🔒</span>
+              <span class="badge-name">{badge.name}</span>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <p class="section-empty">Badges unlock as you hit forecasting milestones.</p>
+      {/if}
+    </div>
+  </section>
+{/if}
 
 <!-- Recent Activity -->
 <section class="card">
@@ -121,42 +157,46 @@
     <h2 class="section-title">Recent Activity</h2>
     <a href="/predictions" class="view-all">View all →</a>
   </div>
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Market</th>
-        <th>Platform</th>
-        <th>Probability</th>
-        <th>Outcome</th>
-        <th>Brier</th>
-        <th>Date</th>
-      </tr>
-    </thead>
-    <tbody>
-      {#each recentPredictions as pred}
+  {#if recentPredictions.length === 0}
+    <p class="section-empty" style="padding: 24px 0 8px;">No predictions yet — <a href="/settings">connect a platform</a> to get started.</p>
+  {:else}
+    <table class="table">
+      <thead>
         <tr>
-          <td class="market-title">{pred.market_title}</td>
-          <td>
-            <span class="source-chip" style="color:{sourceColor(pred.source)};">
-              {pred.source}
-            </span>
-          </td>
-          <td class="num">{fmtPct(pred.probability)}</td>
-          <td>
-            {#if pred.outcome === 'yes'}
-              <span class="outcome yes">YES</span>
-            {:else if pred.outcome === 'no'}
-              <span class="outcome no">NO</span>
-            {:else}
-              <span class="outcome pending">Pending</span>
-            {/if}
-          </td>
-          <td class="num">{pred.brier_score != null ? fmt(pred.brier_score) : '—'}</td>
-          <td class="date">{fmtDate(pred.created_at)}</td>
+          <th>Market</th>
+          <th>Platform</th>
+          <th>Probability</th>
+          <th>Outcome</th>
+          <th>Brier</th>
+          <th>Date</th>
         </tr>
-      {/each}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {#each recentPredictions as pred}
+          <tr>
+            <td class="market-title">{pred.market_title}</td>
+            <td>
+              <span class="source-chip" style="color:{sourceColor(pred.source)};">
+                {pred.source}
+              </span>
+            </td>
+            <td class="num">{fmtPct(pred.probability)}</td>
+            <td>
+              {#if pred.outcome === 'yes'}
+                <span class="outcome yes">YES</span>
+              {:else if pred.outcome === 'no'}
+                <span class="outcome no">NO</span>
+              {:else}
+                <span class="outcome pending">Pending</span>
+              {/if}
+            </td>
+            <td class="num">{pred.brier_score != null ? fmt(pred.brier_score) : '—'}</td>
+            <td class="date">{fmtDate(pred.created_at)}</td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  {/if}
 </section>
 
 <style>
@@ -184,6 +224,32 @@
     font-size: 13px;
     color: #9ca3af;
     padding-top: 6px;
+  }
+
+  /* ---- Pending notice ---- */
+  .pending-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-size: 14px;
+    color: #0c4a6e;
+    margin-bottom: 20px;
+    line-height: 1.5;
+  }
+
+  .pending-notice a {
+    color: #0284c7;
+    font-weight: 500;
+  }
+
+  .pending-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+    margin-top: 1px;
   }
 
   /* ---- Cards ---- */
@@ -261,6 +327,16 @@
 
   .section-header .section-title {
     margin-bottom: 0;
+  }
+
+  .section-empty {
+    font-size: 13px;
+    color: #9ca3af;
+    line-height: 1.5;
+  }
+
+  .section-empty a {
+    color: #4f8ef7;
   }
 
   .view-all {
@@ -420,20 +496,9 @@
     letter-spacing: 0.04em;
   }
 
-  .outcome.yes {
-    background: #d1fae5;
-    color: #065f46;
-  }
-
-  .outcome.no {
-    background: #fee2e2;
-    color: #991b1b;
-  }
-
-  .outcome.pending {
-    background: #fef3c7;
-    color: #92400e;
-  }
+  .outcome.yes     { background: #d1fae5; color: #065f46; }
+  .outcome.no      { background: #fee2e2; color: #991b1b; }
+  .outcome.pending { background: #fef3c7; color: #92400e; }
 
   .date {
     color: #9ca3af;
