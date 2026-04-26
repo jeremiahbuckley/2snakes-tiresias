@@ -10,6 +10,35 @@
 #       The codebase default is already correct.
 #
 # Docs: https://docs.manifold.markets/api
+#
+# ============================================================
+# STANDARD TESTING FLOW
+# ============================================================
+#
+# Use manifold.local.http (gitignored) for this — fill in your real
+# username there before starting.
+#
+# Step 1 — Confirm auth and get your userId
+#   Run: GET /me  (USER section)
+#   → Response includes "id" field. Copy that value.
+#   → Write it to @userId in your local file.
+#
+# Step 2 — Fetch your bet history
+#   Run: GET /bets?username={{username}}&limit=100  (BETS section)
+#   → Each bet has a "contractId" field.
+#   → Note one contractId to inspect in the next step.
+#   → Verify bets have: id, contractId, amount, outcome, probBefore, probAfter, createdTime
+#
+# Step 3 — Fetch the market for that bet
+#   Write the contractId from Step 2 to @contractId in your local file.
+#   Run: GET /market/{{contractId}}  (Option A, BETS section)
+#   → Verify market has: id, question, isResolved, resolution, probability
+#   → This is what connector_manifold/adapter.py normalises into a Market row.
+#
+# Step 4 — Confirm the full position picture (optional but recommended)
+#   Run: GET /get-user-contract-metrics-with-contracts  (PORTFOLIO section)
+#   → Returns positions + embedded market objects in one call.
+#   → Useful sanity-check: the markets here should match what Step 3 returns.
 
 @baseUrl  = https://api.manifold.markets/v0
 @apiKey   = {{$dotenv MANIFOLD_API_KEY}}
