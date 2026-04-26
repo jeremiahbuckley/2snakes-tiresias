@@ -4,14 +4,35 @@
 #
 # Auth: set METACULUS_TOKEN in the root .env file.
 # Format: "Token <token>" (not Bearer, not Key).
-# Required on all endpoints — public GET requests work without it but
-# authenticated requests include your own forecast data (my_forecasts).
-#
-# To find your Metaculus integer user ID, send the "Get current user"
-# request below first — the id field in the response is what the
-# connector uses as forecaster_id.
 #
 # Docs: https://www.metaculus.com/api/
+#
+# ============================================================
+# STANDARD TESTING FLOW
+# ============================================================
+#
+# Use metaculus.local.http (gitignored) for this — fill in your real
+# @forecasterId there once you have it from Step 1.
+#
+# Step 1 — Confirm auth and get your integer user ID
+#   Run: GET /api/users/me/  (USERS section)
+#   → Response includes "id" (integer). Copy that value.
+#   → Write it to @forecasterId in your local file.
+#
+# Step 2 — Fetch posts where you have forecasted
+#   Run: GET /api/posts/?forecaster_id={{forecasterId}}&limit=20  (POSTS section)
+#   → Each result has a "question" object and a "my_forecasts" array.
+#   → Note one post "id" to inspect in the next step.
+#   → Verify binary questions have: question.type == "binary",
+#     question.resolution, my_forecasts[].probability_yes
+#
+# Step 3 — Fetch the full details for a single post
+#   Write the post id from Step 2 to @postId in your local file.
+#   Run: GET /api/posts/{{postId}}/  (POSTS section)
+#   → Verify the post has: id, question.title, question.resolution,
+#     my_forecasts with probability_yes values
+#   → This is what connector_metaculus/adapter.py normalises into
+#     a Market + Prediction row.
 
 @baseUrl = https://www.metaculus.com
 @token   = {{$dotenv METACULUS_TOKEN}}

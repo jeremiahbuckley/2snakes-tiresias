@@ -9,6 +9,34 @@
 #   Gamma API: https://gamma-api.polymarket.com
 #   Data API:  https://data-api.polymarket.com
 #   CLOB API:  https://clob.polymarket.com (not implemented in codebase)
+#
+# ============================================================
+# STANDARD TESTING FLOW
+# ============================================================
+#
+# Use polymarket.local.http (gitignored) for this — fill in your real
+# wallet address there before starting.
+#
+# Step 1 — Fetch your trade history
+#   Run: GET /trades?user={{wallet}}&limit=100  (DATA API section)
+#   → Each trade has a "slug" field and a "conditionId" field.
+#   → Note one slug to use in Step 3.
+#   → Verify trades have: conditionId, side, price, size, outcome,
+#     outcomeIndex, timestamp, title, slug
+#
+# Step 2 — Fetch your closed positions
+#   Run: GET /closed-positions?user={{wallet}}  (DATA API section)
+#   → Each record is a resolved market the user held a position in.
+#   → Verify records have: conditionId, outcome, realizedPnl, avgPrice,
+#     totalBought, endDate, title, slug
+#   → Cross-check: slugs here should overlap with slugs from Step 1.
+#
+# Step 3 — Fetch market metadata for a trade
+#   Write the slug from Step 1 to @slug below.
+#   Run: GET /markets?slug={{slug}}&include_tag=true  (GAMMA API section)
+#   → Verify market has: id, slug, question, description, active,
+#     closed, endDate, tags
+#   → This is what connector_polymarket/adapter.py normalises into a Market row.
 
 @gammaBase = https://gamma-api.polymarket.com
 @dataBase  = https://data-api.polymarket.com
