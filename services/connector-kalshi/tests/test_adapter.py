@@ -259,3 +259,17 @@ def test_normalise_settlement_yes_result():
     s = normalise_settlement(raw, user_id="user-1")
     assert s["market_result"] == "yes"
     assert s["revenue"] == 380
+
+
+def test_normalise_market_tags_from_category():
+    """A market with a category field produces a one-element tags list."""
+    raw = {**SAMPLE_MARKET, "category": "Politics"}
+    m = normalise_market(raw)
+    assert m["tags"] == ["Politics"]
+
+
+def test_normalise_market_tags_empty_when_no_category():
+    """A market with no category field produces an empty tags list."""
+    raw = {k: v for k, v in SAMPLE_MARKET.items() if k != "category"}
+    m = normalise_market(raw)
+    assert m["tags"] == []

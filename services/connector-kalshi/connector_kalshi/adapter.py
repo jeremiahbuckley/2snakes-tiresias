@@ -47,6 +47,7 @@ def normalise_market(raw: dict[str, Any]) -> dict[str, Any]:
         ),
         "resolved": raw.get("status") == "finalized",
         "outcome": raw.get("result"),  # "yes" | "no" | None
+        "tags": [raw["category"]] if raw.get("category") else [],
         "raw": raw,
     }
 
