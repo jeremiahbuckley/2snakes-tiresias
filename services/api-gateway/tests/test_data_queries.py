@@ -177,6 +177,7 @@ from data.models.prediction import Prediction
 from data.models.score import UserScore
 from data.models.user import User
 from api_gateway.data_queries import get_dashboard_data, get_predictions, get_stats_data
+from api_gateway.data_queries import _user_tags
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -192,9 +193,9 @@ async def _make_user(session) -> User:
     return user
 
 
-async def _make_market(session, question: str = "Will X happen?") -> Market:
+async def _make_market(session, question: str = "Will X happen?", tags: list[str] | None = None) -> Market:
     # Market uses 'title' instead of 'question'
-    m = Market(title=question)
+    m = Market(title=question, tags=tags or [])
     session.add(m)
     await session.flush()
     return m
@@ -385,3 +386,30 @@ async def test_db_stats_returns_score_and_charts(session):
     assert result['score']['total_predictions'] == 5
     assert len(result['calibration']) == 10
     assert result['brier_timeline'] == [{'date': '2026-03', 'score': 0.04}]
+
+
+# ── _user_tags ────────────────────────────────────────────────────────────────
+
+async def test_db_user_tags_returns_sorted_distinct_tags(session):
+    user = await _make_user(session)
+    m1 = await _make_market(session, tags=['politics', 'us'])
+    m2 = await _make_market(session, tags=['crypto', 'politics'])  # 'politics' appears twice
+    await _make_prediction(session, user, m1)
+    await _make_prediction(session, user, m2)
+    result = await _user_tags(user.id, session)
+    assert result == ['crypto', 'politics', 'us']  # sorted, no duplicates
+
+
+async def test_db_user_tags_excludes_other_users(session):
+    user1 = await _make_user(session)
+    user2 = await _make_user(session)
+    m = await _make_market(session, tags=['sports'])
+    await _make_prediction(session, user2, m)
+    result = await _user_tags(user1.id, session)
+    assert result == []
+
+
+async def test_db_user_tags_empty_when_no_predictions(session):
+    user = await _make_user(session)
+    result = await _user_tags(user.id, session)
+    assert result == []

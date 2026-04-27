@@ -93,6 +93,22 @@ def _compute_score_from_predictions(predictions: list) -> dict:
     }
 
 
+async def _user_tags(user_id: UUID, session: AsyncSession) -> list[str]:
+    """Return sorted deduplicated list of all tags from markets the user has predictions for."""
+    result = await session.execute(
+        select(Market.tags)
+        .join(Prediction, Prediction.market_id == Market.id)
+        .where(Prediction.user_id == user_id)
+        .distinct()
+    )
+    rows = result.scalars().all()
+    tags: set[str] = set()
+    for row in rows:
+        if row:
+            tags.update(row)
+    return sorted(tags)
+
+
 def _compute_calibration(resolved_predictions: list) -> list[dict]:
     """10-bin calibration curve from resolved predictions.
 
