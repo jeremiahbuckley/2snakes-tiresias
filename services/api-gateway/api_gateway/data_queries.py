@@ -57,6 +57,42 @@ def _compute_per_source(resolved_predictions: list) -> dict:
     }
 
 
+def _compute_score_from_predictions(predictions: list) -> dict:
+    """Compute a score summary dict from a raw list of Prediction ORM rows.
+
+    Used for tag-filtered stats/dashboard views where the pre-aggregated
+    UserScore table cannot be used.
+    """
+    resolved = [p for p in predictions if p.brier_score is not None]
+    if not resolved:
+        return {
+            'total_predictions': len(predictions),
+            'resolved_predictions': 0,
+            'mean_brier_score': None,
+            'brier_skill_score': None,
+            'calibration_score': None,
+            'accuracy': None,
+            'last_scored_at': None,
+            'per_source': {},
+            'per_domain': {},
+        }
+    scores = [float(p.brier_score) for p in resolved]
+    mean_brier = round(sum(scores) / len(scores), 4)
+    bss = round((0.25 - mean_brier) / 0.25, 4)
+    accuracy = round(sum(1 for s in scores if s <= 0.25) / len(scores), 4)
+    return {
+        'total_predictions': len(predictions),
+        'resolved_predictions': len(resolved),
+        'mean_brier_score': mean_brier,
+        'brier_skill_score': bss,
+        'calibration_score': None,
+        'accuracy': accuracy,
+        'last_scored_at': None,
+        'per_source': _compute_per_source(resolved),
+        'per_domain': {},
+    }
+
+
 def _compute_calibration(resolved_predictions: list) -> list[dict]:
     """10-bin calibration curve from resolved predictions.
 

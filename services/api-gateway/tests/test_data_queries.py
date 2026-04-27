@@ -5,6 +5,7 @@ from api_gateway.data_queries import (
     _compute_calibration,
     _compute_brier_timeline,
     _compute_per_source,
+    _compute_score_from_predictions,
 )
 from datetime import datetime, timezone
 
@@ -120,6 +121,47 @@ def test_compute_per_source_groups_by_source():
     result = _compute_per_source([p1, p2, p3])
     assert abs(result['kalshi'] - 0.15) < 0.001  # mean(0.10, 0.20)
     assert result['manifold'] == 0.3
+
+
+# ── _compute_score_from_predictions ─────────────────────────────────────────
+
+def test_compute_score_from_predictions_empty():
+    result = _compute_score_from_predictions([])
+    assert result['total_predictions'] == 0
+    assert result['resolved_predictions'] == 0
+    assert result['mean_brier_score'] is None
+    assert result['brier_skill_score'] is None
+    assert result['accuracy'] is None
+
+
+def test_compute_score_from_predictions_with_resolved():
+    p1 = _FakePred(0.8, 0.04)   # brier=0.04 ≤ 0.25 → accurate
+    p2 = _FakePred(0.3, 0.09)   # brier=0.09 ≤ 0.25 → accurate
+    p3 = _FakePred(0.5, 0.25)   # brier=0.25 ≤ 0.25 → accurate
+    result = _compute_score_from_predictions([p1, p2, p3])
+    assert result['total_predictions'] == 3
+    assert result['resolved_predictions'] == 3
+    expected_mean = round((0.04 + 0.09 + 0.25) / 3, 4)
+    assert abs(result['mean_brier_score'] - expected_mean) < 0.0001
+    expected_bss = round((0.25 - expected_mean) / 0.25, 4)
+    assert abs(result['brier_skill_score'] - expected_bss) < 0.0001
+    assert result['accuracy'] == 1.0  # all three ≤ 0.25
+
+
+def test_compute_score_from_predictions_mixed_pending():
+    import types
+    pending = types.SimpleNamespace(brier_score=None, source='kalshi',
+                                    probability=0.6, is_resolved=False, resolved_at=None)
+    resolved = _FakePred(0.7, 0.09)
+    result = _compute_score_from_predictions([pending, resolved])
+    assert result['total_predictions'] == 2
+    assert result['resolved_predictions'] == 1
+    assert result['mean_brier_score'] == 0.09
+
+
+def test_compute_score_from_predictions_calibration_score_is_none():
+    result = _compute_score_from_predictions([_FakePred(0.7, 0.09)])
+    assert result['calibration_score'] is None
 
 
 # ── DB query function tests ───────────────────────────────────────────────────
