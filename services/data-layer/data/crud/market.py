@@ -40,7 +40,7 @@ class MarketCRUD(CRUDBase[Market, MarketCreate, MarketUpdate]):
         *,
         skip: int = 0,
         limit: int = 50,
-        category: Optional[str] = None,
+        tag: Optional[str] = None,
     ) -> Sequence[Market]:
         """Return markets that are not yet resolved."""
         stmt = (
@@ -50,8 +50,8 @@ class MarketCRUD(CRUDBase[Market, MarketCreate, MarketUpdate]):
             .limit(limit)
             .order_by(Market.created_at.desc())
         )
-        if category:
-            stmt = stmt.where(Market.category == category)
+        if tag:
+            stmt = stmt.where(Market.tags.contains([tag]))
         result = await db.execute(stmt)
         return result.scalars().all()
 
@@ -139,6 +139,7 @@ class MarketCRUD(CRUDBase[Market, MarketCreate, MarketUpdate]):
                 resolution_criteria=normalized.get("resolution_criteria"),
                 closes_at=normalized.get("closes_at"),
                 resolves_at=normalized.get("resolves_at"),
+                tags=normalized.get("tags", []),
             )
         else:
             # Refresh mutable metadata fields
@@ -152,6 +153,9 @@ class MarketCRUD(CRUDBase[Market, MarketCreate, MarketUpdate]):
                 market.closes_at = normalized["closes_at"]
             if normalized.get("resolves_at") is not None:
                 market.resolves_at = normalized["resolves_at"]
+            incoming_tags = normalized.get("tags", [])
+            if incoming_tags:
+                market.tags = incoming_tags
 
         # Apply resolution if the market resolved on the platform and is not
         # already resolved locally (avoids overwriting a manual resolution).
