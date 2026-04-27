@@ -41,7 +41,8 @@ from data.crud.market import MarketCRUD
 from data.crud.prediction import PredictionCRUD
 from data.crud.score import ScoreCRUD
 from data.crud.user import UserCRUD
-from data.models.market import MarketOutcome
+from sqlalchemy import select
+from data.models.market import Market, MarketOutcome
 from data.models.prediction import Prediction
 
 logger = logging.getLogger(__name__)
@@ -205,23 +206,37 @@ async def detect_and_score_resolutions() -> None:
                     all_resolved = await PredictionCRUD.list_by_user(
                         db, uid, resolved_only=True, limit=10_000
                     )
+
+                    # Batch-load tags for all markets in this user's history.
+                    _market_ids = {p.market_id for p in all_resolved}
+                    _tag_rows = (
+                        await db.execute(
+                            select(Market.id, Market.tags).where(
+                                Market.id.in_(_market_ids)
+                            )
+                        )
+                    ).all()
+                    _market_tags: dict[UUID, list[str]] = {
+                        row.id: row.tags for row in _tag_rows
+                    }
+
                     pred_records = [
                         PredictionRecord(
                             prediction_id=str(p.id),
                             predicted_probability=float(p.probability),
                             outcome=fresh_market.outcome == MarketOutcome.YES,
                             source=p.source or "unknown",
-                            domain=None,  # TODO: add domain/category mapping
+                            domain=(_market_tags.get(p.market_id) or [None])[0],
                         )
                         for p in all_resolved
-                        if p.market_id == fresh_market.id  # limit to current market for outcome
+                        if p.market_id == fresh_market.id
                     ] + [
                         PredictionRecord(
                             prediction_id=str(p.id),
                             predicted_probability=float(p.probability),
                             outcome=float(p.brier_score) <= 0.25,  # proxy for correct direction
                             source=p.source or "unknown",
-                            domain=None,
+                            domain=(_market_tags.get(p.market_id) or [None])[0],
                         )
                         for p in all_resolved
                         if p.market_id != fresh_market.id
