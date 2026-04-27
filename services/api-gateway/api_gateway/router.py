@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth_service.api import get_current_user
@@ -38,10 +38,11 @@ async def get_user_dashboard(
     user_id: str,
     current_user: CurrentUser,
     db: DB,
+    tag: Optional[str] = Query(default=None),
 ) -> dict:
     if user_id != str(current_user.id):
         raise HTTPException(status_code=403)
-    return await get_dashboard_data(db, current_user.id)
+    return await get_dashboard_data(db, current_user.id, tag=tag)
 
 
 @router.get("/users/{user_id}/predictions")
@@ -52,10 +53,11 @@ async def list_user_predictions(
     source: Optional[str] = None,
     status: Optional[str] = None,
     sort: Optional[str] = None,
+    tag: Optional[str] = Query(default=None),
 ) -> dict:
     if user_id != str(current_user.id):
         raise HTTPException(status_code=403)
-    return await _get_predictions(db, current_user.id, source, status, sort)
+    return await _get_predictions(db, current_user.id, source, status, sort, tag=tag)
 
 
 @router.get("/users/{user_id}/stats")
@@ -63,10 +65,11 @@ async def get_user_stats(
     user_id: str,
     current_user: CurrentUser,
     db: DB,
+    tag: Optional[str] = Query(default=None),
 ) -> dict:
     if user_id != str(current_user.id):
         raise HTTPException(status_code=403)
-    return await get_stats_data(db, current_user.id)
+    return await get_stats_data(db, current_user.id, tag=tag)
 
 
 @router.get("/leaderboard")
