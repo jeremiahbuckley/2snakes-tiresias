@@ -115,6 +115,12 @@ class ScoreCRUD(CRUDBase[UserScore, UserScorePublic, UserScorePublic]):
         score.brier_score_sum = existing_sum + sum(new_brier_scores)
         score.recompute_mean_brier()
 
+        # Keep total_predictions in sync so ck_resolved_lte_total never fires.
+        total_result = await db.execute(
+            select(func.count(Prediction.id)).where(Prediction.user_id == user_id)
+        )
+        score.total_predictions = total_result.scalar_one()
+
         # Recalculate calibration & accuracy from scratch (small cost)
         score.calibration_score = await self._compute_calibration(db, user_id)
         score.accuracy = await self._compute_accuracy(db, user_id)
