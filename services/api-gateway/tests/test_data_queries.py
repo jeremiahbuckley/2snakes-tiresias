@@ -292,6 +292,44 @@ async def test_db_dashboard_badges_resolved_from_catalog(session):
     assert all(b['earned'] is True for b in result['badges'])
 
 
+async def test_db_dashboard_tag_filter_recomputes_score(session):
+    user = await _make_user(session)
+    await _make_score(session, user, total_predictions=50, resolved_predictions=40, mean_brier_score=0.99)
+    m_politics = await _make_market(session, tags=['politics'])
+    m_crypto   = await _make_market(session, tags=['crypto'])
+    t = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    await _make_prediction(session, user, m_politics, probability=0.8, brier_score=0.04, resolved_at=t)
+    await _make_prediction(session, user, m_crypto,   probability=0.5, brier_score=0.25, resolved_at=t)
+    result = await get_dashboard_data(session, user.id, tag='politics')
+    assert result['score']['resolved_predictions'] == 1
+    assert abs(result['score']['mean_brier_score'] - 0.04) < 0.001
+
+
+async def test_db_dashboard_tag_filter_limits_recent_predictions(session):
+    user = await _make_user(session)
+    m_politics = await _make_market(session, tags=['politics'])
+    m_crypto   = await _make_market(session, tags=['crypto'])
+    for _ in range(3):
+        await _make_prediction(session, user, m_politics)
+    for _ in range(5):
+        await _make_prediction(session, user, m_crypto)
+    result = await get_dashboard_data(session, user.id, tag='politics')
+    assert len(result['recent_predictions']) == 3
+    assert all(
+        'politics' in (p.get('tags') or [])
+        for p in result['recent_predictions']
+    )
+
+
+async def test_db_dashboard_includes_available_tags(session):
+    user = await _make_user(session)
+    m = await _make_market(session, tags=['politics'])
+    await _make_prediction(session, user, m)
+    result = await get_dashboard_data(session, user.id)
+    assert 'available_tags' in result
+    assert 'politics' in result['available_tags']
+
+
 # ── get_predictions ───────────────────────────────────────────────────────────
 
 async def test_db_predictions_returns_all_when_no_filter(session):

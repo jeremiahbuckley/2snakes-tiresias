@@ -208,9 +208,50 @@ def _pred_dict(p: object) -> dict:
 
 # ── DB query functions ───────────────────────────────────────────────────────
 
-async def get_dashboard_data(session: AsyncSession, user_id: UUID) -> dict:
+async def get_dashboard_data(session: AsyncSession, user_id: UUID, tag: Optional[str] = None) -> dict:
     user_result = await session.execute(select(User).where(User.id == user_id))
     user = user_result.scalar_one()
+
+    available_tags = await _user_tags(user_id, session)
+
+    user_dict = {
+        'id': str(user.id),
+        'username': user.username,
+        'display_name': user.display_name,
+        'email': user.email,
+        'bio': user.bio,
+        'avatar_url': user.avatar_url,
+        'social_links': user.social_links or {},
+    }
+
+    if tag:
+        all_preds_result = await session.execute(
+            select(Prediction)
+            .join(Market, Prediction.market_id == Market.id)
+            .where(Prediction.user_id == user_id)
+            .where(Market.tags.contains([tag]))
+            .options(selectinload(Prediction.market))
+        )
+        all_preds = all_preds_result.scalars().all()
+
+        recent_result = await session.execute(
+            select(Prediction)
+            .join(Market, Prediction.market_id == Market.id)
+            .where(Prediction.user_id == user_id)
+            .where(Market.tags.contains([tag]))
+            .options(selectinload(Prediction.market))
+            .order_by(coalesce(Prediction.placed_at, Prediction.created_at).desc())
+            .limit(5)
+        )
+        recent = recent_result.scalars().all()
+
+        return {
+            'user': user_dict,
+            'score': _compute_score_from_predictions(all_preds),
+            'badges': [],
+            'recent_predictions': [_pred_dict(p) for p in recent],
+            'available_tags': available_tags,
+        }
 
     score_result = await session.execute(select(UserScore).where(UserScore.user_id == user_id))
     score = score_result.scalar_one_or_none()
@@ -253,18 +294,11 @@ async def get_dashboard_data(session: AsyncSession, user_id: UUID) -> dict:
     score_data['total_predictions'] = total_pred_count
 
     return {
-        'user': {
-            'id': str(user.id),
-            'username': user.username,
-            'display_name': user.display_name,
-            'email': user.email,
-            'bio': user.bio,
-            'avatar_url': user.avatar_url,
-            'social_links': user.social_links or {},
-        },
+        'user': user_dict,
         'score': score_data,
         'badges': badges,
         'recent_predictions': [_pred_dict(p) for p in recent],
+        'available_tags': available_tags,
     }
 
 
