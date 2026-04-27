@@ -22,6 +22,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    op.drop_index("ix_markets_category", table_name="markets")
     op.drop_column("markets", "category")
     op.add_column(
         "markets",
@@ -29,7 +30,7 @@ def upgrade() -> None:
             "tags",
             postgresql.ARRAY(sa.Text()),
             nullable=False,
-            server_default="{}",
+            server_default=sa.text("'{}'"),
         ),
     )
     op.create_index(
@@ -47,3 +48,4 @@ def downgrade() -> None:
         "markets",
         sa.Column("category", sa.String(128), nullable=True),
     )
+    op.create_index("ix_markets_category", "markets", ["category"])
