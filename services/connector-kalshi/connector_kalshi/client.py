@@ -124,27 +124,47 @@ class KalshiClient:
             return resp.json().get("market", {})
 
     async def get_fills(self, **params: Any) -> list[dict]:
-        """Return the authenticated user's fill history (bet executions)."""
-        # TODO: implement pagination (cursor-based)
+        """Return the authenticated user's full fill history, paginating via cursor."""
         path = "/trade-api/v2/portfolio/fills"
+        all_fills: list[dict] = []
+        cursor: str | None = None
         async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"{self._base_url}/portfolio/fills",
-                headers=self._headers("GET", path),
-                params=params,
-            )
-            resp.raise_for_status()
-            return resp.json().get("fills", [])
+            while True:
+                p = {**params}
+                if cursor:
+                    p["cursor"] = cursor
+                resp = await client.get(
+                    f"{self._base_url}/portfolio/fills",
+                    headers=self._headers("GET", path),
+                    params=p,
+                )
+                resp.raise_for_status()
+                body = resp.json()
+                all_fills.extend(body.get("fills", []))
+                cursor = body.get("cursor") or None
+                if not cursor:
+                    break
+        return all_fills
 
     async def get_settlements(self, **params: Any) -> list[dict]:
-        """Return the authenticated user's settlement history (resolved outcomes)."""
-        # TODO: implement pagination (cursor-based)
+        """Return the authenticated user's full settlement history, paginating via cursor."""
         path = "/trade-api/v2/portfolio/settlements"
+        all_settlements: list[dict] = []
+        cursor: str | None = None
         async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"{self._base_url}/portfolio/settlements",
-                headers=self._headers("GET", path),
-                params=params,
-            )
-            resp.raise_for_status()
-            return resp.json().get("settlements", [])
+            while True:
+                p = {**params}
+                if cursor:
+                    p["cursor"] = cursor
+                resp = await client.get(
+                    f"{self._base_url}/portfolio/settlements",
+                    headers=self._headers("GET", path),
+                    params=p,
+                )
+                resp.raise_for_status()
+                body = resp.json()
+                all_settlements.extend(body.get("settlements", []))
+                cursor = body.get("cursor") or None
+                if not cursor:
+                    break
+        return all_settlements
