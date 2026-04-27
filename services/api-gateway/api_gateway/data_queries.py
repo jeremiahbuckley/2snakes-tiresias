@@ -125,7 +125,7 @@ def _score_dict(score: Optional[object], per_source: dict) -> dict:
         'accuracy': float(score.accuracy) if score.accuracy is not None else None,
         'last_scored_at': score.last_scored_at.isoformat() if score.last_scored_at else None,
         'per_source': per_source,
-        'per_domain': {},  # domain taxonomy not yet stored in DB
+        'per_domain': {},  # populated by scoring engine once it scores domain-tagged predictions
     }
 
 
@@ -147,7 +147,7 @@ def _pred_dict(p: object) -> dict:
         'is_resolved': p.is_resolved,
         'brier_score': float(p.brier_score) if p.brier_score is not None else None,
         'rationale': p.rationale,
-        'category': None,  # category not stored on Prediction; add when Market gains tags
+        'tags': p.market.tags if p.market is not None else [],
         'placed_at': p.placed_at.isoformat() if p.placed_at else None,
         'created_at': p.created_at.isoformat(),
         'resolved_at': p.resolved_at.isoformat() if p.resolved_at else None,
