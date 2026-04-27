@@ -167,8 +167,13 @@ async def test_kalshi_sync(db, kalshi_account, scenario):
 
 One `pytest_asyncio.fixture` per connector. Each inserts a `User` and a `LinkedAccount` row
 (with `is_enabled=True`, `is_verified=True`, the correct `Platform` value, and a
-test-safe `external_identifier`). Credentials use a placeholder encrypted value since the
-client is mocked and `decrypt_credential` is not called in the patched path.
+test-safe `external_identifier`). The `credential_encrypted` field must hold a valid
+Fernet-encrypted value (e.g. an encrypted empty string) because `_sync_manifold`,
+`_sync_metaculus`, and `_sync_polymarket` all call `decrypt_credential(account.credential_encrypted)`
+before instantiating the mocked client. The decrypted value itself does not matter since
+the client is mocked. `_sync_kalshi` reads credentials from env vars, not from the account,
+so its fixture can store `None` for `credential_encrypted`. The conftest must set
+`CREDENTIAL_ENCRYPTION_KEY` to a valid Fernet key.
 
 Fixtures: `kalshi_account`, `manifold_account`, `metaculus_account`, `polymarket_account`.
 Each yields the `LinkedAccount` ORM object (which carries `.user_id`).
@@ -190,6 +195,8 @@ async def assert_scenario(db: AsyncSession, expected: dict) -> None:
             actual = getattr(match, field)
             assert actual == pytest.approx(value) if isinstance(value, float) else actual == value
 
+    # V1: single-prediction fixtures only — index-based matching is sufficient.
+    # For multi-prediction scenarios, match by external_id instead.
     for i, exp_p in enumerate(expected.get("predictions", [])):
         pred = predictions[i]
         for field, value in exp_p.items():
@@ -214,8 +221,6 @@ No Python changes required.
 ## Dependencies and constraints
 
 - Requires the `tiresias_test` Postgres instance (same as other integration tests).
-- `CREDENTIAL_ENCRYPTION_KEY` env var must be set to a valid Fernet key; the test conftest can
-  set a throwaway value since `decrypt_credential` is not exercised through the mocked client path.
-  (Kalshi's `_sync_kalshi` does not call `decrypt_credential` — it reads env vars directly. Other
-  connectors do call it, so the conftest must set a valid key.)
-- No new package dependencies needed (`unittest.mock` is stdlib).
+- `CREDENTIAL_ENCRYPTION_KEY` env var must be set to a valid Fernet key (the conftest can
+  generate one with `Fernet.generate_key()` and set it via `os.environ`).
+- No new package dependencies needed (`unittest.mock` and `cryptography` are already in the tree).
