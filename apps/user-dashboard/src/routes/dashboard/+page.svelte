@@ -191,7 +191,7 @@
               {/if}
             </td>
             <td class="num">{pred.brier_score != null ? fmt(pred.brier_score) : '—'}</td>
-            <td class="date">{fmtDate(pred.created_at)}</td>
+            <td class="date">{fmtDate(pred.placed_at ?? pred.created_at)}</td>
           </tr>
         {/each}
       </tbody>

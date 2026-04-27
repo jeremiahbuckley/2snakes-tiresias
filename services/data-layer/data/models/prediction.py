@@ -87,6 +87,15 @@ class Prediction(TimestampMixin, Base):
     )
 
     # -------------------------------------------------------------------------
+    # Forecast metadata
+    # -------------------------------------------------------------------------
+    placed_at: Mapped[Optional[DateTime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        doc="When the user made this forecast on the source platform (connector-supplied).",
+    )
+
+    # -------------------------------------------------------------------------
     # Resolution snapshot
     # -------------------------------------------------------------------------
     resolved_at: Mapped[Optional[DateTime]] = mapped_column(

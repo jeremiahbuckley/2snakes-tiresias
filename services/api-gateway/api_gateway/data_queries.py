@@ -15,6 +15,7 @@ from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.sql.expression import coalesce
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -147,6 +148,7 @@ def _pred_dict(p: object) -> dict:
         'brier_score': float(p.brier_score) if p.brier_score is not None else None,
         'rationale': p.rationale,
         'category': None,  # category not stored on Prediction; add when Market gains tags
+        'placed_at': p.placed_at.isoformat() if p.placed_at else None,
         'created_at': p.created_at.isoformat(),
         'resolved_at': p.resolved_at.isoformat() if p.resolved_at else None,
     }
@@ -165,7 +167,7 @@ async def get_dashboard_data(session: AsyncSession, user_id: UUID) -> dict:
         select(Prediction)
         .where(Prediction.user_id == user_id)
         .options(selectinload(Prediction.market))
-        .order_by(Prediction.created_at.desc())
+        .order_by(coalesce(Prediction.placed_at, Prediction.created_at).desc())
         .limit(5)
     )
     recent = recent_result.scalars().all()
@@ -230,14 +232,15 @@ async def get_predictions(
     elif status == 'pending':
         base = base.where(Prediction.brier_score.is_(None))
 
+    date_col = coalesce(Prediction.placed_at, Prediction.created_at)
     if sort in ('brier_asc', 'brier_score'):
         base = base.order_by(Prediction.brier_score.asc().nulls_last())
     elif sort == 'brier_desc':
         base = base.order_by(Prediction.brier_score.desc().nulls_last())
     elif sort == 'date_asc':
-        base = base.order_by(Prediction.created_at.asc())
+        base = base.order_by(date_col.asc())
     else:
-        base = base.order_by(Prediction.created_at.desc())
+        base = base.order_by(date_col.desc())
 
     paged = base.limit(50).options(selectinload(Prediction.market))
     pred_result = await session.execute(paged)

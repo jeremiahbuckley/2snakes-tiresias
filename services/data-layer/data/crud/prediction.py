@@ -141,6 +141,7 @@ class PredictionCRUD(CRUDBase[Prediction, PredictionCreate, PredictionUpdate]):
         source = normalized.get("source")
         external_id = normalized.get("external_id")
 
+        placed_at = normalized.get("placed_at")
         existing = await self.get_by_user_and_market(db, user_id=user_id, market_id=market_id)
 
         if existing is not None:
@@ -151,6 +152,8 @@ class PredictionCRUD(CRUDBase[Prediction, PredictionCreate, PredictionUpdate]):
             existing.probability = probability
             existing.source = source
             existing.external_id = external_id
+            if placed_at is not None:
+                existing.placed_at = placed_at
             db.add(existing)
             await db.flush()
             await db.refresh(existing)
@@ -163,6 +166,7 @@ class PredictionCRUD(CRUDBase[Prediction, PredictionCreate, PredictionUpdate]):
             probability=probability,
             source=source,
             external_id=external_id,
+            placed_at=placed_at,
         )
         db.add(prediction)
         await db.flush()
