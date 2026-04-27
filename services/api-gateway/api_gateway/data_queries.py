@@ -15,7 +15,7 @@ from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
-from sqlalchemy.sql.expression import coalesce
+from sqlalchemy.sql.functions import coalesce
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
