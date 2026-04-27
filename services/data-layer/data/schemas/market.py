@@ -21,7 +21,7 @@ class MarketCreate(BaseModel):
     title: str = Field(..., min_length=10, max_length=512)
     description: Optional[str] = Field(None, max_length=10_000)
     resolution_criteria: Optional[str] = Field(None, max_length=5_000)
-    category: Optional[str] = Field(None, max_length=128)
+    tags: list[str] = Field(default_factory=list)
     source_url: Optional[str] = Field(None, max_length=2048)
     closes_at: Optional[datetime] = None
     resolves_at: Optional[datetime] = None
@@ -38,7 +38,7 @@ class MarketUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=10, max_length=512)
     description: Optional[str] = Field(None, max_length=10_000)
     resolution_criteria: Optional[str] = Field(None, max_length=5_000)
-    category: Optional[str] = Field(None, max_length=128)
+    tags: Optional[list[str]] = None
     source_url: Optional[str] = Field(None, max_length=2048)
     closes_at: Optional[datetime] = None
     resolves_at: Optional[datetime] = None
@@ -58,7 +58,7 @@ class MarketPublic(BaseModel):
     title: str
     description: Optional[str]
     resolution_criteria: Optional[str]
-    category: Optional[str]
+    tags: list[str]
     source_url: Optional[str]
     closes_at: Optional[datetime]
     resolves_at: Optional[datetime]

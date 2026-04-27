@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text, text
-from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.dialects.postgresql import ARRAY as PG_ARRAY, UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from data.database import Base, TimestampMixin, new_uuid
@@ -77,7 +77,12 @@ class Market(TimestampMixin, Base):
     title: Mapped[str] = mapped_column(String(512), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     resolution_criteria: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    category: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
+    tags: Mapped[list[str]] = mapped_column(
+        PG_ARRAY(Text()),
+        nullable=False,
+        default=list,
+        server_default="{}",
+    )
     source_url: Mapped[Optional[str]] = mapped_column(String(2048), nullable=True)
 
     # -------------------------------------------------------------------------

@@ -157,7 +157,6 @@ async def test_create_market(db: AsyncSession):
         db,
         obj_in=MarketCreate(
             title="Will it rain in SF tomorrow?",
-            category="weather",
         ),
         creator_id=user.id,
     )
