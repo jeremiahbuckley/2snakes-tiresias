@@ -333,7 +333,26 @@ async def get_predictions(
     }
 
 
-async def get_stats_data(session: AsyncSession, user_id: UUID) -> dict:
+async def get_stats_data(session: AsyncSession, user_id: UUID, tag: Optional[str] = None) -> dict:
+    available_tags = await _user_tags(user_id, session)
+
+    if tag:
+        all_preds_result = await session.execute(
+            select(Prediction)
+            .join(Market, Prediction.market_id == Market.id)
+            .where(Prediction.user_id == user_id)
+            .where(Market.tags.contains([tag]))
+            .options(selectinload(Prediction.market))
+        )
+        all_preds = all_preds_result.scalars().all()
+        resolved = [p for p in all_preds if p.brier_score is not None]
+        return {
+            'score': _compute_score_from_predictions(all_preds),
+            'calibration': _compute_calibration(resolved),
+            'brier_timeline': _compute_brier_timeline(resolved),
+            'available_tags': available_tags,
+        }
+
     score_result = await session.execute(select(UserScore).where(UserScore.user_id == user_id))
     score = score_result.scalar_one_or_none()
 
@@ -347,4 +366,5 @@ async def get_stats_data(session: AsyncSession, user_id: UUID) -> dict:
         'score': _score_dict(score, _compute_per_source(resolved)),
         'calibration': _compute_calibration(resolved),
         'brier_timeline': _compute_brier_timeline(resolved),
+        'available_tags': available_tags,
     }

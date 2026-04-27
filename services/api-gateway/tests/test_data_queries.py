@@ -432,6 +432,46 @@ async def test_db_stats_returns_score_and_charts(session):
     assert result['brier_timeline'] == [{'date': '2026-03', 'score': 0.04}]
 
 
+async def test_db_stats_tag_filter_returns_only_tagged_predictions(session):
+    user = await _make_user(session)
+    m_politics = await _make_market(session, tags=['politics'])
+    m_crypto   = await _make_market(session, tags=['crypto'])
+    t = datetime(2026, 3, 1, tzinfo=timezone.utc)
+    await _make_prediction(session, user, m_politics, probability=0.8, brier_score=0.04, resolved_at=t)
+    await _make_prediction(session, user, m_crypto, probability=0.5, brier_score=0.25, resolved_at=t)
+    result = await get_stats_data(session, user.id, tag='politics')
+    assert result['score']['resolved_predictions'] == 1
+    assert abs(result['score']['mean_brier_score'] - 0.04) < 0.001
+    assert result['brier_timeline'] == [{'date': '2026-03', 'score': 0.04}]
+
+
+async def test_db_stats_tag_filter_bypasses_user_score(session):
+    user = await _make_user(session)
+    await _make_score(session, user, total_predictions=100, resolved_predictions=100, mean_brier_score=0.99)
+    m = await _make_market(session, tags=['politics'])
+    t = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    await _make_prediction(session, user, m, probability=0.8, brier_score=0.04, resolved_at=t)
+    result = await get_stats_data(session, user.id, tag='politics')
+    assert result['score']['resolved_predictions'] == 1
+    assert abs(result['score']['mean_brier_score'] - 0.04) < 0.001
+
+
+async def test_db_stats_no_tag_still_uses_user_score(session):
+    user = await _make_user(session)
+    await _make_score(session, user, total_predictions=5, resolved_predictions=3, mean_brier_score=0.15)
+    result = await get_stats_data(session, user.id)
+    assert result['score']['total_predictions'] == 5
+
+
+async def test_db_stats_includes_available_tags(session):
+    user = await _make_user(session)
+    m = await _make_market(session, tags=['politics'])
+    await _make_prediction(session, user, m)
+    result = await get_stats_data(session, user.id)
+    assert 'available_tags' in result
+    assert 'politics' in result['available_tags']
+
+
 # ── _user_tags ────────────────────────────────────────────────────────────────
 
 async def test_db_user_tags_returns_sorted_distinct_tags(session):
