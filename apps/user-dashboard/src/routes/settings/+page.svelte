@@ -30,8 +30,7 @@
       description: 'Crypto-based prediction market',
       identifierLabel: 'Wallet Address',
       identifierPlaceholder: '0x…',
-      credentialLabel: 'Wallet / API Key',
-      credentialPlaceholder: '0x…',
+      identifierOnly: true,
     },
     {
       id: 'manifold',
@@ -363,6 +362,7 @@
                 required
               />
             </div>
+            {#if !platform.identifierOnly}
             <div class="field">
               <label for="market_cred_{platform.id}">{platform.credentialLabel}</label>
               {#if platform.credentialIsMultiline}
@@ -388,6 +388,7 @@
                 <span class="field-hint">{platform.credentialHint}</span>
               {/if}
             </div>
+            {/if}
             <button type="submit" class="btn btn-primary">Link account</button>
           </form>
         </div>

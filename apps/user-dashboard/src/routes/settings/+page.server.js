@@ -121,16 +121,17 @@ export const actions = {
     const data = await request.formData();
     const platform = data.get('platform')?.toString() ?? '';
     const identifier = data.get('identifier')?.toString() ?? '';
-    const credential = data.get('credential')?.toString() ?? '';
+    const credential = data.get('credential')?.toString() || null;
 
-    if (!identifier || !credential) {
+    const credentialRequired = platform !== 'polymarket';
+    if (!identifier || (credentialRequired && !credential)) {
       return fail(400, { error: 'Identifier and credential are required.', platform });
     }
     try {
       await api(fetch, `/auth/me/linked-accounts/${platform}`, {
         token,
         method: 'PUT',
-        body: { external_identifier: identifier, credential, is_enabled: true },
+        body: { external_identifier: identifier, ...(credential ? { credential } : {}), is_enabled: true },
       });
     } catch (err) {
       return fail(err.status ?? 500, { error: 'Could not link account. Check your credentials and try again.', platform });

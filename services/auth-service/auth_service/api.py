@@ -165,8 +165,7 @@ class ProfileIn(BaseModel):
 
 class LinkedAccountIn(BaseModel):
     external_identifier: str = Field(max_length=256)
-    credential: str = Field(description="API key, OAuth token, or app password (plaintext — encrypted server-side)")
-    message: Optional[str] = Field(default=None, description="Message signed by the wallet (Polymarket only)")
+    credential: Optional[str] = Field(default=None, description="API key, OAuth token, or app password (plaintext — encrypted server-side). Omit for platforms that need no credential (e.g. Polymarket).")
     is_enabled: bool = True
 
 
@@ -350,18 +349,17 @@ async def upsert_linked_account(
     outage) → the credential is stored with ``is_verified=False`` so the user
     isn't blocked by temporary upstream issues; sync will re-verify later.
 
-    Polymarket uses EIP-191 wallet-signature verification (``message`` field
-    required). X and Bluesky skip verification (stubs, see
-    ``linked_accounts.VERIFICATION_SKIPPED``).
+    Polymarket, X, and Bluesky skip verification (see ``linked_accounts.VERIFICATION_SKIPPED``).
+    Polymarket only requires a wallet address — the API is fully public.
     """
     # --- Verify before persisting ------------------------------------------
-    # `None`  → skipped (X, Bluesky — social stubs)
+    # `None`  → skipped (Polymarket, X, Bluesky)
     # `True`  → verified
     # `False` → platform rejected the credential → 400
     # raise   → network/unexpected → treat as unverified, still store
     try:
         verification = await verify_upsert_credential(
-            platform, body.external_identifier, body.credential, message=body.message
+            platform, body.external_identifier, body.credential
         )
     except ValueError as exc:
         # Malformed input (empty PEM, unparseable key, etc.) — caller error.
@@ -410,7 +408,7 @@ async def upsert_linked_account(
     )
     account = result.scalar_one_or_none()
 
-    encrypted_credential = _encrypt_credential(body.credential)
+    encrypted_credential = _encrypt_credential(body.credential) if body.credential else None
 
     if account is None:
         account = LinkedAccount(

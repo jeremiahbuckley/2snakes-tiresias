@@ -346,12 +346,12 @@ VERIFIERS: dict[Platform, VerifierFn] = {
 # - X / Bluesky: verifiers are still stubs (raise NotImplementedError).
 
 VERIFICATION_SKIPPED: frozenset[Platform] = frozenset(
-    {Platform.X, Platform.BLUESKY}
+    {Platform.POLYMARKET, Platform.X, Platform.BLUESKY}
 )
 
 
 async def verify_upsert_credential(
-    platform: Platform, external_identifier: str, credential: str, *, message: str | None = None
+    platform: Platform, external_identifier: str, credential: str | None, *, message: str | None = None
 ) -> bool | None:
     """
     Unified dispatch used by ``upsert_linked_account``.
@@ -366,23 +366,18 @@ async def verify_upsert_credential(
         httpx.HTTPError — network / upstream 5xx. Caller may treat this as
                           "accept but mark unverified" to avoid blocking on
                           upstream outages.
-        ValueError      — malformed input (empty required field, bad PEM,
-                          missing message for Polymarket).
+        ValueError      — malformed input (empty required field, bad PEM).
 
     Per-platform argument mapping:
         Kalshi     → (external_identifier=key_id, credential=PEM)
         Manifold   → (credential=api_key)
         Metaculus  → (credential=token)
-        Polymarket → (external_identifier=wallet_address, credential=signature, message=signed_text)
+        Polymarket → skipped (public API, wallet address only)
         X/Bluesky  → skipped (stubs)
     """
     if platform in VERIFICATION_SKIPPED:
         return None
 
-    if platform is Platform.POLYMARKET:
-        if not message:
-            raise ValueError("message is required for Polymarket wallet verification")
-        return await verify_polymarket_credential(external_identifier, message, credential)
     if platform is Platform.KALSHI:
         return await verify_kalshi_credential(external_identifier, credential)
     if platform is Platform.MANIFOLD:

@@ -256,37 +256,22 @@ async def test_metaculus_external_identifier_falls_back_on_resolve_error() -> No
 
 
 # ---------------------------------------------------------------------------
-# Per-platform routing — Polymarket verified with real EIP-191 signature
+# Polymarket — wallet address only, no credential, no verification
 # ---------------------------------------------------------------------------
 
-async def test_polymarket_end_to_end_verifies_with_three_fields() -> None:
-    """
-    Full stack test: real verify_upsert_credential dispatch (no mock) for Polymarket.
-    Confirms a valid wallet signature produces is_verified=True.
-    """
-    from eth_account import Account
-    from eth_account.messages import encode_defunct
-
-    acct = Account.create()
-    msg = "link this wallet to tiresias"
-    signed = Account.sign_message(encode_defunct(text=msg), private_key=acct.key)
-    signature = signed.signature.hex()
-
+async def test_polymarket_stores_wallet_address_without_credential() -> None:
+    """Polymarket only needs a wallet address — no credential, no verification."""
     user = _make_user()
     db = _make_db(existing_account=None)
 
     out = await upsert_linked_account(
         Platform.POLYMARKET,
-        LinkedAccountIn(
-            external_identifier=acct.address,
-            credential=signature,
-            message=msg,
-            is_enabled=True,
-        ),
+        LinkedAccountIn(external_identifier="0xFf087b904c694BdC4F2710940E4BeEDDAD7Efccc", is_enabled=True),
         user,
         db,
     )
 
-    assert out.is_verified is True
+    assert out.is_verified is False  # skipped, not rejected
     assert out.platform == "polymarket"
+    assert out.external_identifier == "0xFf087b904c694BdC4F2710940E4BeEDDAD7Efccc"
     assert db.add.called
