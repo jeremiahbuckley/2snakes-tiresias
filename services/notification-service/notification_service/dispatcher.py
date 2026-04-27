@@ -21,6 +21,7 @@ retries we can re-drive off the ``status="failed"`` rows in
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import sys
 from dataclasses import dataclass
@@ -222,7 +223,8 @@ async def _handle_market_resolved(n: Notification, db: AsyncSession) -> None:
         return
 
     market_ids = sorted(str(r["market_id"]) for r in resolutions)
-    dedupe_key = ",".join(market_ids)
+    # Hash the key: a batch of many UUIDs can exceed VARCHAR(256).
+    dedupe_key = hashlib.sha256(",".join(market_ids).encode()).hexdigest()
 
     await _deliver(
         db=db,

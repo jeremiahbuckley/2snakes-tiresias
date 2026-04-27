@@ -9,6 +9,7 @@ PostgreSQL or network calls.
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -156,7 +157,7 @@ class TestMarketResolved:
         mocks["crud_claim"].assert_awaited_once()
         kwargs = mocks["crud_claim"].call_args.kwargs
         assert kwargs["event_type"] == "market_resolved"
-        assert kwargs["dedupe_key"] == "market-1"
+        assert kwargs["dedupe_key"] == hashlib.sha256(b"market-1").hexdigest()
 
         # Actually tried to send
         mocks["send_mock"].assert_awaited_once()
@@ -194,7 +195,8 @@ class TestMarketResolved:
         await _dispatch_with_mocks(n, mocks)
 
         assert (
-            mocks["crud_claim"].call_args.kwargs["dedupe_key"] == "alpha,zebra"
+            mocks["crud_claim"].call_args.kwargs["dedupe_key"]
+            == hashlib.sha256(b"alpha,zebra").hexdigest()
         )
 
     async def test_skips_when_user_opted_out(self):
