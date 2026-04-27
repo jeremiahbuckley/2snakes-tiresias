@@ -274,9 +274,14 @@ async def get_predictions(
     source: Optional[str],
     status: Optional[str],
     sort: Optional[str],
+    tag: Optional[str] = None,
 ) -> dict:
     base = select(Prediction).where(Prediction.user_id == user_id)
 
+    if tag:
+        base = base.join(Market, Prediction.market_id == Market.id).where(
+            Market.tags.contains([tag])
+        )
     if source and source != 'all':
         base = base.where(Prediction.source == source)
     if status == 'resolved':
@@ -298,21 +303,24 @@ async def get_predictions(
     pred_result = await session.execute(paged)
     predictions = pred_result.scalars().all()
 
-    # Count totals directly from prediction rows — UserScore.total_predictions is only
-    # updated by the scoring engine (requires market resolutions), so it reads 0 for
-    # new users with pending predictions.
-    total_all_result = await session.execute(
-        select(func.count(Prediction.id)).where(Prediction.user_id == user_id)
+    # Build count queries — scoped to same tag filter when present
+    all_count_q = select(func.count(Prediction.id)).where(Prediction.user_id == user_id)
+    resolved_count_q = select(func.count(Prediction.id)).where(
+        Prediction.user_id == user_id,
+        Prediction.brier_score.is_not(None),
     )
-    total_all = total_all_result.scalar_one()
+    if tag:
+        all_count_q = all_count_q.join(
+            Market, Prediction.market_id == Market.id
+        ).where(Market.tags.contains([tag]))
+        resolved_count_q = resolved_count_q.join(
+            Market, Prediction.market_id == Market.id
+        ).where(Market.tags.contains([tag]))
 
-    total_resolved_result = await session.execute(
-        select(func.count(Prediction.id)).where(
-            Prediction.user_id == user_id,
-            Prediction.brier_score.is_not(None),
-        )
-    )
-    total_resolved = total_resolved_result.scalar_one()
+    total_all = (await session.execute(all_count_q)).scalar_one()
+    total_resolved = (await session.execute(resolved_count_q)).scalar_one()
+
+    available_tags = await _user_tags(user_id, session)
 
     return {
         'predictions': [_pred_dict(p) for p in predictions],
@@ -321,6 +329,7 @@ async def get_predictions(
             'resolved': total_resolved,
             'pending': total_all - total_resolved,
         },
+        'available_tags': available_tags,
     }
 
 

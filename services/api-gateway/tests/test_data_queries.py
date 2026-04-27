@@ -361,6 +361,50 @@ async def test_db_predictions_includes_totals(session):
     assert result['totals']['pending'] == 4
 
 
+async def test_db_predictions_filters_by_tag(session):
+    user = await _make_user(session)
+    m_politics = await _make_market(session, tags=['politics'])
+    m_crypto   = await _make_market(session, tags=['crypto'])
+    await _make_prediction(session, user, m_politics, source='kalshi')
+    await _make_prediction(session, user, m_crypto,   source='manifold')
+    result = await get_predictions(session, user.id, None, None, None, tag='politics')
+    assert len(result['predictions']) == 1
+    assert result['predictions'][0]['source'] == 'kalshi'
+
+
+async def test_db_predictions_tag_filter_returns_correct_totals(session):
+    user = await _make_user(session)
+    m_politics = await _make_market(session, tags=['politics'])
+    m_crypto   = await _make_market(session, tags=['crypto'])
+    t = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    await _make_prediction(session, user, m_politics, brier_score=0.1, resolved_at=t)
+    await _make_prediction(session, user, m_politics)   # pending
+    await _make_prediction(session, user, m_crypto, brier_score=0.2, resolved_at=t)
+    result = await get_predictions(session, user.id, None, None, None, tag='politics')
+    assert result['totals']['all'] == 2
+    assert result['totals']['resolved'] == 1
+    assert result['totals']['pending'] == 1
+
+
+async def test_db_predictions_includes_available_tags(session):
+    user = await _make_user(session)
+    m = await _make_market(session, tags=['politics', 'us'])
+    await _make_prediction(session, user, m)
+    result = await get_predictions(session, user.id, None, None, None)
+    assert 'available_tags' in result
+    assert 'politics' in result['available_tags']
+    assert 'us' in result['available_tags']
+
+
+async def test_db_predictions_unknown_tag_returns_empty(session):
+    user = await _make_user(session)
+    m = await _make_market(session, tags=['politics'])
+    await _make_prediction(session, user, m)
+    result = await get_predictions(session, user.id, None, None, None, tag='nonexistent')
+    assert result['predictions'] == []
+    assert result['totals']['all'] == 0
+
+
 # ── get_stats_data ────────────────────────────────────────────────────────────
 
 async def test_db_stats_no_predictions_returns_empty_charts(session):
