@@ -57,6 +57,58 @@ def _compute_per_source(resolved_predictions: list) -> dict:
     }
 
 
+def _compute_score_from_predictions(predictions: list) -> dict:
+    """Compute a score summary dict from a raw list of Prediction ORM rows.
+
+    Used for tag-filtered stats/dashboard views where the pre-aggregated
+    UserScore table cannot be used.
+    """
+    resolved = [p for p in predictions if p.brier_score is not None]
+    if not resolved:
+        return {
+            'total_predictions': len(predictions),
+            'resolved_predictions': 0,
+            'mean_brier_score': None,
+            'brier_skill_score': None,
+            'calibration_score': None,
+            'accuracy': None,
+            'last_scored_at': None,
+            'per_source': {},
+            'per_domain': {},
+        }
+    scores = [float(p.brier_score) for p in resolved]
+    mean_brier = round(sum(scores) / len(scores), 4)
+    bss = round((0.25 - mean_brier) / 0.25, 4)
+    accuracy = round(sum(1 for s in scores if s <= 0.25) / len(scores), 4)
+    return {
+        'total_predictions': len(predictions),
+        'resolved_predictions': len(resolved),
+        'mean_brier_score': mean_brier,
+        'brier_skill_score': bss,
+        'calibration_score': None,
+        'accuracy': accuracy,
+        'last_scored_at': None,
+        'per_source': _compute_per_source(resolved),
+        'per_domain': {},
+    }
+
+
+async def _user_tags(user_id: UUID, session: AsyncSession) -> list[str]:
+    """Return sorted deduplicated list of all tags from markets the user has predictions for."""
+    result = await session.execute(
+        select(Market.tags)
+        .join(Prediction, Prediction.market_id == Market.id)
+        .where(Prediction.user_id == user_id)
+        .distinct()
+    )
+    rows = result.scalars().all()
+    tags: set[str] = set()
+    for row in rows:
+        if row:
+            tags.update(row)
+    return sorted(tags)
+
+
 def _compute_calibration(resolved_predictions: list) -> list[dict]:
     """10-bin calibration curve from resolved predictions.
 
@@ -156,9 +208,50 @@ def _pred_dict(p: object) -> dict:
 
 # ── DB query functions ───────────────────────────────────────────────────────
 
-async def get_dashboard_data(session: AsyncSession, user_id: UUID) -> dict:
+async def get_dashboard_data(session: AsyncSession, user_id: UUID, tag: Optional[str] = None) -> dict:
     user_result = await session.execute(select(User).where(User.id == user_id))
     user = user_result.scalar_one()
+
+    available_tags = await _user_tags(user_id, session)
+
+    user_dict = {
+        'id': str(user.id),
+        'username': user.username,
+        'display_name': user.display_name,
+        'email': user.email,
+        'bio': user.bio,
+        'avatar_url': user.avatar_url,
+        'social_links': user.social_links or {},
+    }
+
+    if tag:
+        all_preds_result = await session.execute(
+            select(Prediction)
+            .join(Market, Prediction.market_id == Market.id)
+            .where(Prediction.user_id == user_id)
+            .where(Market.tags.contains([tag]))
+            .options(selectinload(Prediction.market))
+        )
+        all_preds = all_preds_result.scalars().all()
+
+        recent_result = await session.execute(
+            select(Prediction)
+            .join(Market, Prediction.market_id == Market.id)
+            .where(Prediction.user_id == user_id)
+            .where(Market.tags.contains([tag]))
+            .options(selectinload(Prediction.market))
+            .order_by(coalesce(Prediction.placed_at, Prediction.created_at).desc())
+            .limit(5)
+        )
+        recent = recent_result.scalars().all()
+
+        return {
+            'user': user_dict,
+            'score': _compute_score_from_predictions(all_preds),
+            'badges': [],
+            'recent_predictions': [_pred_dict(p) for p in recent],
+            'available_tags': available_tags,
+        }
 
     score_result = await session.execute(select(UserScore).where(UserScore.user_id == user_id))
     score = score_result.scalar_one_or_none()
@@ -201,18 +294,11 @@ async def get_dashboard_data(session: AsyncSession, user_id: UUID) -> dict:
     score_data['total_predictions'] = total_pred_count
 
     return {
-        'user': {
-            'id': str(user.id),
-            'username': user.username,
-            'display_name': user.display_name,
-            'email': user.email,
-            'bio': user.bio,
-            'avatar_url': user.avatar_url,
-            'social_links': user.social_links or {},
-        },
+        'user': user_dict,
         'score': score_data,
         'badges': badges,
         'recent_predictions': [_pred_dict(p) for p in recent],
+        'available_tags': available_tags,
     }
 
 
@@ -222,9 +308,14 @@ async def get_predictions(
     source: Optional[str],
     status: Optional[str],
     sort: Optional[str],
+    tag: Optional[str] = None,
 ) -> dict:
     base = select(Prediction).where(Prediction.user_id == user_id)
 
+    if tag:
+        base = base.join(Market, Prediction.market_id == Market.id).where(
+            Market.tags.contains([tag])
+        )
     if source and source != 'all':
         base = base.where(Prediction.source == source)
     if status == 'resolved':
@@ -246,21 +337,24 @@ async def get_predictions(
     pred_result = await session.execute(paged)
     predictions = pred_result.scalars().all()
 
-    # Count totals directly from prediction rows — UserScore.total_predictions is only
-    # updated by the scoring engine (requires market resolutions), so it reads 0 for
-    # new users with pending predictions.
-    total_all_result = await session.execute(
-        select(func.count(Prediction.id)).where(Prediction.user_id == user_id)
+    # Build count queries — scoped to same tag filter when present
+    all_count_q = select(func.count(Prediction.id)).where(Prediction.user_id == user_id)
+    resolved_count_q = select(func.count(Prediction.id)).where(
+        Prediction.user_id == user_id,
+        Prediction.brier_score.is_not(None),
     )
-    total_all = total_all_result.scalar_one()
+    if tag:
+        all_count_q = all_count_q.join(
+            Market, Prediction.market_id == Market.id
+        ).where(Market.tags.contains([tag]))
+        resolved_count_q = resolved_count_q.join(
+            Market, Prediction.market_id == Market.id
+        ).where(Market.tags.contains([tag]))
 
-    total_resolved_result = await session.execute(
-        select(func.count(Prediction.id)).where(
-            Prediction.user_id == user_id,
-            Prediction.brier_score.is_not(None),
-        )
-    )
-    total_resolved = total_resolved_result.scalar_one()
+    total_all = (await session.execute(all_count_q)).scalar_one()
+    total_resolved = (await session.execute(resolved_count_q)).scalar_one()
+
+    available_tags = await _user_tags(user_id, session)
 
     return {
         'predictions': [_pred_dict(p) for p in predictions],
@@ -269,10 +363,30 @@ async def get_predictions(
             'resolved': total_resolved,
             'pending': total_all - total_resolved,
         },
+        'available_tags': available_tags,
     }
 
 
-async def get_stats_data(session: AsyncSession, user_id: UUID) -> dict:
+async def get_stats_data(session: AsyncSession, user_id: UUID, tag: Optional[str] = None) -> dict:
+    available_tags = await _user_tags(user_id, session)
+
+    if tag:
+        all_preds_result = await session.execute(
+            select(Prediction)
+            .join(Market, Prediction.market_id == Market.id)
+            .where(Prediction.user_id == user_id)
+            .where(Market.tags.contains([tag]))
+            .options(selectinload(Prediction.market))
+        )
+        all_preds = all_preds_result.scalars().all()
+        resolved = [p for p in all_preds if p.brier_score is not None]
+        return {
+            'score': _compute_score_from_predictions(all_preds),
+            'calibration': _compute_calibration(resolved),
+            'brier_timeline': _compute_brier_timeline(resolved),
+            'available_tags': available_tags,
+        }
+
     score_result = await session.execute(select(UserScore).where(UserScore.user_id == user_id))
     score = score_result.scalar_one_or_none()
 
@@ -286,4 +400,5 @@ async def get_stats_data(session: AsyncSession, user_id: UUID) -> dict:
         'score': _score_dict(score, _compute_per_source(resolved)),
         'calibration': _compute_calibration(resolved),
         'brier_timeline': _compute_brier_timeline(resolved),
+        'available_tags': available_tags,
     }

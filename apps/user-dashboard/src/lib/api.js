@@ -71,8 +71,11 @@ export async function updateProfile(token, { display_name, bio, avatar_url }) {
 // ---------------------------------------------------------------------------
 
 /** Private dashboard data: scores, badges, recent predictions. */
-export async function getDashboard(userId, token) {
-  return apiFetch(`/users/${userId}/dashboard`, { token });
+export async function getDashboard(userId, token, { tag = '' } = {}) {
+  const params = new URLSearchParams();
+  if (tag) params.set('tag', tag);
+  const qs = params.toString();
+  return apiFetch(`/users/${userId}/dashboard${qs ? '?' + qs : ''}`, { token });
 }
 
 // ---------------------------------------------------------------------------
@@ -83,13 +86,14 @@ export async function getDashboard(userId, token) {
  * Paginated, filtered prediction list.
  * @param {string} userId
  * @param {string} token
- * @param {{ source?: string, status?: string, sort?: string }} [filters]
+ * @param {{ source?: string, status?: string, sort?: string, tag?: string }} [filters]
  */
-export async function getPredictions(userId, token, { source = '', status = '', sort = 'date_desc' } = {}) {
+export async function getPredictions(userId, token, { source = '', status = '', sort = 'date_desc', tag = '' } = {}) {
   const params = new URLSearchParams();
   if (source && source !== 'all') params.set('source', source);
   if (status && status !== 'all') params.set('status', status);
   if (sort && sort !== 'date_desc') params.set('sort', sort);
+  if (tag) params.set('tag', tag);
   const qs = params.toString();
   return apiFetch(`/users/${userId}/predictions${qs ? '?' + qs : ''}`, { token });
 }
@@ -99,8 +103,11 @@ export async function getPredictions(userId, token, { source = '', status = '', 
 // ---------------------------------------------------------------------------
 
 /** Scores + calibration curve + Brier timeline. */
-export async function getUserStats(userId, token) {
-  return apiFetch(`/users/${userId}/stats`, { token });
+export async function getUserStats(userId, token, { tag = '' } = {}) {
+  const params = new URLSearchParams();
+  if (tag) params.set('tag', tag);
+  const qs = params.toString();
+  return apiFetch(`/users/${userId}/stats${qs ? '?' + qs : ''}`, { token });
 }
 
 // ---------------------------------------------------------------------------

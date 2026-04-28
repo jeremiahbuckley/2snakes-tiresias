@@ -5,6 +5,7 @@ from api_gateway.data_queries import (
     _compute_calibration,
     _compute_brier_timeline,
     _compute_per_source,
+    _compute_score_from_predictions,
 )
 from datetime import datetime, timezone
 
@@ -122,6 +123,47 @@ def test_compute_per_source_groups_by_source():
     assert result['manifold'] == 0.3
 
 
+# ── _compute_score_from_predictions ─────────────────────────────────────────
+
+def test_compute_score_from_predictions_empty():
+    result = _compute_score_from_predictions([])
+    assert result['total_predictions'] == 0
+    assert result['resolved_predictions'] == 0
+    assert result['mean_brier_score'] is None
+    assert result['brier_skill_score'] is None
+    assert result['accuracy'] is None
+
+
+def test_compute_score_from_predictions_with_resolved():
+    p1 = _FakePred(0.8, 0.04)   # brier=0.04 ≤ 0.25 → accurate
+    p2 = _FakePred(0.3, 0.09)   # brier=0.09 ≤ 0.25 → accurate
+    p3 = _FakePred(0.5, 0.25)   # brier=0.25 ≤ 0.25 → accurate
+    result = _compute_score_from_predictions([p1, p2, p3])
+    assert result['total_predictions'] == 3
+    assert result['resolved_predictions'] == 3
+    expected_mean = round((0.04 + 0.09 + 0.25) / 3, 4)
+    assert abs(result['mean_brier_score'] - expected_mean) < 0.0001
+    expected_bss = round((0.25 - expected_mean) / 0.25, 4)
+    assert abs(result['brier_skill_score'] - expected_bss) < 0.0001
+    assert result['accuracy'] == 1.0  # all three ≤ 0.25
+
+
+def test_compute_score_from_predictions_mixed_pending():
+    import types
+    pending = types.SimpleNamespace(brier_score=None, source='kalshi',
+                                    probability=0.6, is_resolved=False, resolved_at=None)
+    resolved = _FakePred(0.7, 0.09)
+    result = _compute_score_from_predictions([pending, resolved])
+    assert result['total_predictions'] == 2
+    assert result['resolved_predictions'] == 1
+    assert result['mean_brier_score'] == 0.09
+
+
+def test_compute_score_from_predictions_calibration_score_is_none():
+    result = _compute_score_from_predictions([_FakePred(0.7, 0.09)])
+    assert result['calibration_score'] is None
+
+
 # ── DB query function tests ───────────────────────────────────────────────────
 # Run: DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/tiresias_test
 #      pytest services/api-gateway/tests/test_data_queries.py -v -k "db"
@@ -135,6 +177,7 @@ from data.models.prediction import Prediction
 from data.models.score import UserScore
 from data.models.user import User
 from api_gateway.data_queries import get_dashboard_data, get_predictions, get_stats_data
+from api_gateway.data_queries import _user_tags
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -150,9 +193,9 @@ async def _make_user(session) -> User:
     return user
 
 
-async def _make_market(session, question: str = "Will X happen?") -> Market:
+async def _make_market(session, question: str = "Will X happen?", tags: list[str] | None = None) -> Market:
     # Market uses 'title' instead of 'question'
-    m = Market(title=question)
+    m = Market(title=question, tags=tags or [])
     session.add(m)
     await session.flush()
     return m
@@ -249,6 +292,44 @@ async def test_db_dashboard_badges_resolved_from_catalog(session):
     assert all(b['earned'] is True for b in result['badges'])
 
 
+async def test_db_dashboard_tag_filter_recomputes_score(session):
+    user = await _make_user(session)
+    await _make_score(session, user, total_predictions=50, resolved_predictions=40, mean_brier_score=0.99)
+    m_politics = await _make_market(session, tags=['politics'])
+    m_crypto   = await _make_market(session, tags=['crypto'])
+    t = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    await _make_prediction(session, user, m_politics, probability=0.8, brier_score=0.04, resolved_at=t)
+    await _make_prediction(session, user, m_crypto,   probability=0.5, brier_score=0.25, resolved_at=t)
+    result = await get_dashboard_data(session, user.id, tag='politics')
+    assert result['score']['resolved_predictions'] == 1
+    assert abs(result['score']['mean_brier_score'] - 0.04) < 0.001
+
+
+async def test_db_dashboard_tag_filter_limits_recent_predictions(session):
+    user = await _make_user(session)
+    m_politics = await _make_market(session, tags=['politics'])
+    m_crypto   = await _make_market(session, tags=['crypto'])
+    for _ in range(3):
+        await _make_prediction(session, user, m_politics)
+    for _ in range(5):
+        await _make_prediction(session, user, m_crypto)
+    result = await get_dashboard_data(session, user.id, tag='politics')
+    assert len(result['recent_predictions']) == 3
+    assert all(
+        'politics' in (p.get('tags') or [])
+        for p in result['recent_predictions']
+    )
+
+
+async def test_db_dashboard_includes_available_tags(session):
+    user = await _make_user(session)
+    m = await _make_market(session, tags=['politics'])
+    await _make_prediction(session, user, m)
+    result = await get_dashboard_data(session, user.id)
+    assert 'available_tags' in result
+    assert 'politics' in result['available_tags']
+
+
 # ── get_predictions ───────────────────────────────────────────────────────────
 
 async def test_db_predictions_returns_all_when_no_filter(session):
@@ -318,6 +399,50 @@ async def test_db_predictions_includes_totals(session):
     assert result['totals']['pending'] == 4
 
 
+async def test_db_predictions_filters_by_tag(session):
+    user = await _make_user(session)
+    m_politics = await _make_market(session, tags=['politics'])
+    m_crypto   = await _make_market(session, tags=['crypto'])
+    await _make_prediction(session, user, m_politics, source='kalshi')
+    await _make_prediction(session, user, m_crypto,   source='manifold')
+    result = await get_predictions(session, user.id, None, None, None, tag='politics')
+    assert len(result['predictions']) == 1
+    assert result['predictions'][0]['source'] == 'kalshi'
+
+
+async def test_db_predictions_tag_filter_returns_correct_totals(session):
+    user = await _make_user(session)
+    m_politics = await _make_market(session, tags=['politics'])
+    m_crypto   = await _make_market(session, tags=['crypto'])
+    t = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    await _make_prediction(session, user, m_politics, brier_score=0.1, resolved_at=t)
+    await _make_prediction(session, user, m_politics)   # pending
+    await _make_prediction(session, user, m_crypto, brier_score=0.2, resolved_at=t)
+    result = await get_predictions(session, user.id, None, None, None, tag='politics')
+    assert result['totals']['all'] == 2
+    assert result['totals']['resolved'] == 1
+    assert result['totals']['pending'] == 1
+
+
+async def test_db_predictions_includes_available_tags(session):
+    user = await _make_user(session)
+    m = await _make_market(session, tags=['politics', 'us'])
+    await _make_prediction(session, user, m)
+    result = await get_predictions(session, user.id, None, None, None)
+    assert 'available_tags' in result
+    assert 'politics' in result['available_tags']
+    assert 'us' in result['available_tags']
+
+
+async def test_db_predictions_unknown_tag_returns_empty(session):
+    user = await _make_user(session)
+    m = await _make_market(session, tags=['politics'])
+    await _make_prediction(session, user, m)
+    result = await get_predictions(session, user.id, None, None, None, tag='nonexistent')
+    assert result['predictions'] == []
+    assert result['totals']['all'] == 0
+
+
 # ── get_stats_data ────────────────────────────────────────────────────────────
 
 async def test_db_stats_no_predictions_returns_empty_charts(session):
@@ -343,3 +468,70 @@ async def test_db_stats_returns_score_and_charts(session):
     assert result['score']['total_predictions'] == 5
     assert len(result['calibration']) == 10
     assert result['brier_timeline'] == [{'date': '2026-03', 'score': 0.04}]
+
+
+async def test_db_stats_tag_filter_returns_only_tagged_predictions(session):
+    user = await _make_user(session)
+    m_politics = await _make_market(session, tags=['politics'])
+    m_crypto   = await _make_market(session, tags=['crypto'])
+    t = datetime(2026, 3, 1, tzinfo=timezone.utc)
+    await _make_prediction(session, user, m_politics, probability=0.8, brier_score=0.04, resolved_at=t)
+    await _make_prediction(session, user, m_crypto, probability=0.5, brier_score=0.25, resolved_at=t)
+    result = await get_stats_data(session, user.id, tag='politics')
+    assert result['score']['resolved_predictions'] == 1
+    assert abs(result['score']['mean_brier_score'] - 0.04) < 0.001
+    assert result['brier_timeline'] == [{'date': '2026-03', 'score': 0.04}]
+
+
+async def test_db_stats_tag_filter_bypasses_user_score(session):
+    user = await _make_user(session)
+    await _make_score(session, user, total_predictions=100, resolved_predictions=100, mean_brier_score=0.99)
+    m = await _make_market(session, tags=['politics'])
+    t = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    await _make_prediction(session, user, m, probability=0.8, brier_score=0.04, resolved_at=t)
+    result = await get_stats_data(session, user.id, tag='politics')
+    assert result['score']['resolved_predictions'] == 1
+    assert abs(result['score']['mean_brier_score'] - 0.04) < 0.001
+
+
+async def test_db_stats_no_tag_still_uses_user_score(session):
+    user = await _make_user(session)
+    await _make_score(session, user, total_predictions=5, resolved_predictions=3, mean_brier_score=0.15)
+    result = await get_stats_data(session, user.id)
+    assert result['score']['total_predictions'] == 5
+
+
+async def test_db_stats_includes_available_tags(session):
+    user = await _make_user(session)
+    m = await _make_market(session, tags=['politics'])
+    await _make_prediction(session, user, m)
+    result = await get_stats_data(session, user.id)
+    assert 'available_tags' in result
+    assert 'politics' in result['available_tags']
+
+
+# ── _user_tags ────────────────────────────────────────────────────────────────
+
+async def test_db_user_tags_returns_sorted_distinct_tags(session):
+    user = await _make_user(session)
+    m1 = await _make_market(session, tags=['politics', 'us'])
+    m2 = await _make_market(session, tags=['crypto', 'politics'])  # 'politics' appears twice
+    await _make_prediction(session, user, m1)
+    await _make_prediction(session, user, m2)
+    result = await _user_tags(user.id, session)
+    assert result == ['crypto', 'politics', 'us']  # sorted, no duplicates
+
+
+async def test_db_user_tags_excludes_other_users(session):
+    user1 = await _make_user(session)
+    user2 = await _make_user(session)
+    m = await _make_market(session, tags=['sports'])
+    await _make_prediction(session, user2, m)
+    result = await _user_tags(user1.id, session)
+    assert result == []
+
+
+async def test_db_user_tags_empty_when_no_predictions(session):
+    user = await _make_user(session)
+    result = await _user_tags(user.id, session)
+    assert result == []

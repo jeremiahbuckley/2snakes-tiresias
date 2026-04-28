@@ -27,4 +27,17 @@ contractTest.describe('predictions', () => {
     await expect(page.locator('table tbody tr')).toHaveCount(5);
     await expect(page.locator('table tbody tr').first()).toContainText('Will the Fed cut rates');
   });
+
+  contractTest('tag dropdown renders when available_tags returned', async ({ authedPage: page }) => {
+    await page.goto('/predictions');
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#tag-filter')).toBeVisible();
+  });
+
+  contractTest('selecting a tag in dropdown updates URL', async ({ authedPage: page }) => {
+    await page.goto('/predictions');
+    await page.waitForLoadState('networkidle');
+    await page.selectOption('#tag-filter', 'politics');
+    await expect(page).toHaveURL(/tag=politics/);
+  });
 });

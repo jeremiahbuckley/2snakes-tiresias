@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 from typing import Annotated, Optional
 
 import bcrypt
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select
@@ -602,7 +602,7 @@ async def update_notification_prefs(
 # ---------------------------------------------------------------------------
 
 @router.get("/share/{token_slug}")
-async def resolve_share_token(token_slug: str, db: DB) -> dict:
+async def resolve_share_token(token_slug: str, db: DB, tag: Optional[str] = Query(default=None)) -> dict:
     """
     Public endpoint — returns scores/badges for the user behind a share token.
 
@@ -633,6 +633,7 @@ async def resolve_share_token(token_slug: str, db: DB) -> dict:
         "show_scores": token.show_scores,
         "show_badges": token.show_badges,
         "show_predictions": token.show_predictions,
+        "available_tags": [],
     }
 
     if token.show_scores and score:

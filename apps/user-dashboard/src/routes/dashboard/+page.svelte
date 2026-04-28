@@ -1,8 +1,22 @@
 <script>
+  import { goto } from '$app/navigation';
+  import TagFilter from '$lib/components/TagFilter.svelte';
+
   /** @type {import('./$types').PageData} */
   export let data;
 
   const { user, score, badges, recentPredictions } = data;
+
+  $: tagFilter = data.tagFilter ?? '';
+  $: availableTags = data.availableTags ?? [];
+
+  function onTagChange(e) {
+    const tag = e.detail;
+    const params = new URLSearchParams();
+    if (tag) params.set('tag', tag);
+    const qs = params.toString();
+    goto(`/dashboard${qs ? '?' + qs : ''}`, { replaceState: true });
+  }
 
   function fmt(n, decimals = 3) {
     return n == null ? '—' : n.toFixed(decimals);
@@ -53,6 +67,11 @@
   {#if score.last_scored_at}
     <div class="last-scored">Last scored: {fmtDate(score.last_scored_at)}</div>
   {/if}
+</div>
+
+<div class="page-controls">
+  <TagFilter availableTags={availableTags} selectedTag={tagFilter} on:change={onTagChange} />
+  {#if tagFilter}<span class="tag-indicator">Showing: {tagFilter}</span>{/if}
 </div>
 
 <!-- Score Summary Cards -->
@@ -504,6 +523,21 @@
     color: #9ca3af;
     font-size: 13px;
     white-space: nowrap;
+  }
+
+  .page-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .tag-indicator {
+    font-size: 13px;
+    color: #374151;
+    background: #f3f4f6;
+    padding: 4px 12px;
+    border-radius: 999px;
   }
 
   @media (max-width: 1100px) {

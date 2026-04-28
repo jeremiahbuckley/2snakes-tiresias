@@ -22,4 +22,18 @@ contractTest.describe('dashboard', () => {
     await page.goto('/dashboard');
     await expect(page.getByText('First Prediction')).toBeVisible();
   });
+
+  contractTest('tag dropdown renders on dashboard', async ({ authedPage: page }) => {
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+    await expect(page.locator('#tag-filter')).toBeVisible();
+  });
+
+  contractTest('selecting a tag on dashboard updates URL and shows indicator', async ({ authedPage: page }) => {
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+    await page.selectOption('#tag-filter', 'politics');
+    await expect(page).toHaveURL(/tag=politics/);
+    await expect(page.locator('.tag-indicator')).toContainText('politics');
+  });
 });

@@ -1,8 +1,21 @@
 <script>
+  import { goto } from '$app/navigation';
+  import TagFilter from '$lib/components/TagFilter.svelte';
+
   /** @type {import('./$types').PageData} */
   export let data;
 
   const { shareData } = data;
+
+  $: tagFilter = data.tagFilter ?? '';
+  $: availableTags = shareData.available_tags ?? [];
+
+  function onTagChange(e) {
+    const tag = e.detail;
+    const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+    if (tag) { params.set('tag', tag); } else { params.delete('tag'); }
+    goto(`?${params.toString()}`, { replaceState: true });
+  }
 
   function fmt(n, decimals = 3) {
     if (n === null || n === undefined) return '—';
@@ -49,6 +62,13 @@
       "I see not what is, but what must be."
     </p>
   </header>
+
+  {#if shareData.show_predictions && availableTags.length > 0}
+    <div class="page-controls">
+      <TagFilter availableTags={availableTags} selectedTag={tagFilter} on:change={onTagChange} />
+      {#if tagFilter}<span class="tag-indicator">Showing: {tagFilter}</span>{/if}
+    </div>
+  {/if}
 
   <!-- Scores panel -->
   {#if shareData.show_scores && scores}
@@ -239,6 +259,20 @@
   .tiresias-link:hover { text-decoration: underline; }
 
   .privacy-note { font-style: italic; }
+
+  .page-controls {
+    max-width: 680px;
+    margin: 0 auto 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .tag-indicator {
+    font-size: 0.875rem;
+    color: var(--text-muted, #888);
+    font-style: italic;
+  }
 
   @media (max-width: 500px) {
     .stats-grid { grid-template-columns: 1fr; }
