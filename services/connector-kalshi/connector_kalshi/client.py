@@ -100,17 +100,27 @@ class KalshiClient:
         }
 
     async def get_markets(self, **params: Any) -> list[dict]:
-        """Return a list of raw market objects from Kalshi."""
-        # TODO: implement pagination (cursor-based)
+        """Return all market objects from Kalshi, paginating via cursor."""
         path = "/trade-api/v2/markets"
+        all_markets: list[dict] = []
+        cursor: str | None = None
         async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"{self._base_url}/markets",
-                headers=self._headers("GET", path),
-                params=params,
-            )
-            resp.raise_for_status()
-            return resp.json().get("markets", [])
+            while True:
+                p = {**params}
+                if cursor:
+                    p["cursor"] = cursor
+                resp = await client.get(
+                    f"{self._base_url}/markets",
+                    headers=self._headers("GET", path),
+                    params=p,
+                )
+                resp.raise_for_status()
+                body = resp.json()
+                all_markets.extend(body.get("markets", []))
+                cursor = body.get("cursor") or None
+                if not cursor:
+                    break
+        return all_markets
 
     async def get_market(self, ticker: str) -> dict:
         """Return a single raw market by ticker."""
