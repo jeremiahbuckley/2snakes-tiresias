@@ -139,6 +139,14 @@ class MetaculusClient:
         """
         async with httpx.AsyncClient(headers=self._headers) as client:
             resp = await client.get(f"{self._base}/api/posts/{post_id}/")
+            if resp.status_code == 429:
+                logger.warning(
+                    "Metaculus rate limited (429) on post %s; waiting %ds then retrying",
+                    post_id,
+                    _RATE_LIMIT_DELAY,
+                )
+                await asyncio.sleep(_RATE_LIMIT_DELAY)
+                resp = await client.get(f"{self._base}/api/posts/{post_id}/")
             resp.raise_for_status()
             return resp.json()
 

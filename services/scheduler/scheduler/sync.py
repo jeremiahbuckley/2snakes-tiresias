@@ -17,6 +17,7 @@ All functions are idempotent — safe to call multiple times without duplicating
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from uuid import UUID
 
@@ -295,6 +296,7 @@ async def _sync_metaculus(db: AsyncSession, account: LinkedAccount) -> int:
     market_id_map: dict[str, UUID] = {}  # str(post_id) -> internal Market.id
     forecasts = []
     for post_id in binary_post_ids:
+        await asyncio.sleep(1.0)  # stay inside ~60 req/min Metaculus rate limit
         try:
             raw_post = await client.get_post(post_id)
             market_norm = normalise_market(raw_post)
