@@ -1,6 +1,7 @@
 <script>
   import { goto } from '$app/navigation';
   import { navigating } from '$app/stores';
+  import TagFilter from '$lib/components/TagFilter.svelte';
 
   /** @type {import('./$types').PageData} */
   export let data;
@@ -15,9 +16,12 @@
   let sourceFilter = data.filters.sourceFilter;
   let statusFilter = data.filters.statusFilter;
   let sortBy = data.filters.sortBy;
+  let tagFilter = data.filters.tagFilter ?? '';
   $: sourceFilter = data.filters.sourceFilter;
   $: statusFilter = data.filters.statusFilter;
   $: sortBy = data.filters.sortBy;
+  $: tagFilter = data.filters.tagFilter ?? '';
+  $: availableTags = data.availableTags ?? [];
 
   const sources = ['all', 'kalshi', 'polymarket', 'manifold', 'metaculus'];
 
@@ -33,8 +37,14 @@
     if (sourceFilter !== 'all') params.set('source', sourceFilter);
     if (statusFilter !== 'all') params.set('status', statusFilter);
     if (sortBy !== 'date_desc') params.set('sort', sortBy);
+    if (tagFilter) params.set('tag', tagFilter);
     const query = params.toString();
     goto(`/predictions${query ? '?' + query : ''}`, { replaceState: true, keepFocus: true });
+  }
+
+  function onTagChange(e) {
+    tagFilter = e.detail;
+    applyFilters();
   }
 
   function fmt(n, d = 3) {
@@ -117,6 +127,8 @@
       {/each}
     </select>
   </div>
+
+  <TagFilter availableTags={availableTags} selectedTag={tagFilter} on:change={onTagChange} />
 </div>
 
 <!-- Table -->
@@ -132,7 +144,7 @@
         <tr>
           <th>Market</th>
           <th>Platform</th>
-          <th>Category</th>
+          <th>Tags</th>
           <th>Probability</th>
           <th>Outcome</th>
           <th>Brier Score</th>
@@ -148,7 +160,17 @@
                 {pred.source}
               </span>
             </td>
-            <td class="category">{pred.category ?? '—'}</td>
+            <td class="col-tags">
+              {#each (pred.tags ?? []) as tag}
+                <button
+                  class="tag-pill"
+                  class:active={tagFilter === tag}
+                  on:click={() => { tagFilter = tag; applyFilters(); }}
+                >
+                  {tag}
+                </button>
+              {/each}
+            </td>
             <td class="num">{fmtPct(pred.probability)}</td>
             <td>
               {#if pred.outcome === 'yes'}
@@ -348,6 +370,28 @@
     color: #9ca3af;
     font-size: 13px;
     white-space: nowrap;
+  }
+
+  .tag-pill {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--border, #ddd);
+    background: #f3f4f6;
+    font-size: 0.75rem;
+    cursor: pointer;
+    margin-right: 0.25rem;
+    color: #374151;
+  }
+
+  .tag-pill.active {
+    background: #1a1f2e;
+    color: #fff;
+    border-color: #1a1f2e;
+  }
+
+  .tag-pill:hover:not(.active) {
+    background: #e5e7eb;
   }
 
   /* ---- Empty ---- */
