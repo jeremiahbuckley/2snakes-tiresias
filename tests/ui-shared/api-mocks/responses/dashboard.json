@@ -34,6 +34,7 @@
       "earned_at": "2025-10-15T00:00:00Z"
     }
   ],
+  "available_tags": ["crypto", "economics", "politics", "tech"],
   "recent_predictions": [
     { "id": "p1", "market_id": "m1", "market_title": "Will the Fed cut rates before July 2025?", "source": "kalshi", "probability": 0.72, "outcome": "yes", "is_resolved": true, "brier_score": 0.078, "created_at": "2026-03-01T00:00:00Z", "resolved_at": "2026-03-15T00:00:00Z", "rationale": null, "category": null },
     { "id": "p2", "market_id": "m2", "market_title": "Will BTC reach $100k by end of 2025?", "source": "polymarket", "probability": 0.55, "outcome": "no", "is_resolved": true, "brier_score": 0.302, "created_at": "2026-02-20T00:00:00Z", "resolved_at": "2026-03-01T00:00:00Z", "rationale": null, "category": null },
