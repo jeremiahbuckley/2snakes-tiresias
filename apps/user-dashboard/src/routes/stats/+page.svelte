@@ -1,8 +1,23 @@
 <script>
+  import { goto } from '$app/navigation';
+  import TagFilter from '$lib/components/TagFilter.svelte';
+
   /** @type {import('./$types').PageData} */
   export let data;
 
-  const { score, calibration, brierTimeline } = data;
+  $: score = data.score;
+  $: calibration = data.calibration;
+  $: brierTimeline = data.brierTimeline;
+  $: tagFilter = data.tagFilter ?? '';
+  $: availableTags = data.availableTags ?? [];
+
+  function onTagChange(e) {
+    const tag = e.detail;
+    const params = new URLSearchParams();
+    if (tag) params.set('tag', tag);
+    const qs = params.toString();
+    goto(`/stats${qs ? '?' + qs : ''}`, { replaceState: true });
+  }
 
   function fmt(n, d = 3) {
     return n == null ? '—' : n.toFixed(d);
@@ -13,7 +28,7 @@
   }
 
   // ---- Calibration SVG chart ----
-  const hasCalibration = calibration.length > 0;
+  $: hasCalibration = calibration.length > 0;
 
   const CAL_W = 500;
   const CAL_H = 260;
@@ -21,8 +36,8 @@
   const calInnerW = CAL_W - CAL_PAD.left - CAL_PAD.right;
   const calInnerH = CAL_H - CAL_PAD.top - CAL_PAD.bottom;
 
-  const numBins = calibration.length || 1; // avoid division by zero
-  const barWidth = calInnerW / numBins;
+  $: numBins = calibration.length || 1;
+  $: barWidth = calInnerW / numBins;
   const BAR_GAP = 4;
 
   function calX(i) {
@@ -34,7 +49,7 @@
   }
 
   // ---- Brier timeline SVG chart ----
-  const hasTimeline = brierTimeline.length > 1;
+  $: hasTimeline = brierTimeline.length > 1;
 
   const TL_W = 600;
   const TL_H = 220;
@@ -42,9 +57,9 @@
   const tlInnerW = TL_W - TL_PAD.left - TL_PAD.right;
   const tlInnerH = TL_H - TL_PAD.top - TL_PAD.bottom;
 
-  const tlScores = brierTimeline.map((d) => d.score);
-  const tlMin = hasTimeline ? Math.max(0, Math.min(...tlScores) - 0.02) : 0;
-  const tlMax = hasTimeline ? Math.min(1, Math.max(...tlScores) + 0.02) : 1;
+  $: tlScores = brierTimeline.map((d) => d.score);
+  $: tlMin = hasTimeline ? Math.max(0, Math.min(...tlScores) - 0.02) : 0;
+  $: tlMax = hasTimeline ? Math.min(1, Math.max(...tlScores) + 0.02) : 1;
 
   function tlX(i) {
     return TL_PAD.left + (i / Math.max(brierTimeline.length - 1, 1)) * tlInnerW;
@@ -55,31 +70,31 @@
     return TL_PAD.top + tlInnerH - ((s - tlMin) / range) * tlInnerH;
   }
 
-  const timelinePath =
+  $: timelinePath =
     'M ' +
     brierTimeline
       .map((d, i) => `${tlX(i)} ${tlY(d.score)}`)
       .join(' L ');
 
-  const areaPath =
+  $: areaPath =
     `M ${tlX(0)} ${TL_PAD.top + tlInnerH} L ` +
     brierTimeline.map((d, i) => `${tlX(i)} ${tlY(d.score)}`).join(' L ') +
     ` L ${tlX(brierTimeline.length - 1)} ${TL_PAD.top + tlInnerH} Z`;
 
-  const tlTicks = [tlMin, (tlMin + tlMax) / 2, tlMax].map((v) => ({
+  $: tlTicks = [tlMin, (tlMin + tlMax) / 2, tlMax].map((v) => ({
     y: tlY(v),
     label: v.toFixed(2),
   }));
 
-  const tlXLabels = brierTimeline
+  $: tlXLabels = brierTimeline
     .map((d, i) => ({ i, label: d.date }))
     .filter((_, i) => i % 3 === 0);
 
   // Domain breakdown sorted best → worst
-  const domains = Object.entries(score.per_domain ?? {}).sort((a, b) => a[1] - b[1]);
+  $: domains = Object.entries(score.per_domain ?? {}).sort((a, b) => a[1] - b[1]);
 
   // Platform breakdown sorted best → worst
-  const platforms = Object.entries(score.per_source ?? {}).sort((a, b) => a[1] - b[1]);
+  $: platforms = Object.entries(score.per_source ?? {}).sort((a, b) => a[1] - b[1]);
 
   const platformColors = {
     kalshi: '#00b894',
@@ -96,6 +111,11 @@
 <div class="page-header">
   <h1>Stats</h1>
   <p class="subtitle">Your forecasting accuracy over time</p>
+</div>
+
+<div class="page-controls">
+  <TagFilter availableTags={availableTags} selectedTag={tagFilter} on:change={onTagChange} />
+  {#if tagFilter}<span class="tag-indicator">Showing: {tagFilter}</span>{/if}
 </div>
 
 <!-- Top stat row -->
@@ -281,7 +301,7 @@
 </section>
 
 <!-- Domain + Platform breakdowns -->
-{#if domains.length > 0 || platforms.length > 0}
+{#if !tagFilter && (domains.length > 0 || platforms.length > 0)}
   <section class="breakdown-row">
     <!-- Domain breakdown -->
     <div class="card">
@@ -534,6 +554,21 @@
     background: #fff;
     border-radius: 12px;
     box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  }
+
+  .page-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .tag-indicator {
+    font-size: 13px;
+    color: #374151;
+    background: #f3f4f6;
+    padding: 4px 12px;
+    border-radius: 999px;
   }
 
   @media (max-width: 1100px) {
