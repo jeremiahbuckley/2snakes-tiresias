@@ -50,7 +50,7 @@ class PolymarketClient:
 
     async def get_user_trades(self, wallet_address: str, **params: Any) -> list[dict]:
         """
-        Return trade history for a wallet address.
+        Return all trades for a wallet address, paginating via offset.
 
         GET https://data-api.polymarket.com/trades?user=<address>
 
@@ -59,55 +59,79 @@ class PolymarketClient:
         Each trade includes: conditionId, side, price, size, outcome,
                              outcomeIndex, timestamp, title, slug.
         """
-        # TODO: implement pagination (offset-based, max offset 10000)
+        limit = int(params.pop("limit", 100))
+        all_trades: list[dict] = []
+        offset = 0
         async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"{self._data}/trades",
-                params={"user": wallet_address, **params},
-            )
-            resp.raise_for_status()
-            return resp.json()
+            while True:
+                resp = await client.get(
+                    f"{self._data}/trades",
+                    params={"user": wallet_address, "limit": limit, "offset": offset, **params},
+                )
+                resp.raise_for_status()
+                page = resp.json()
+                all_trades.extend(page)
+                if len(page) < limit:
+                    break
+                offset += limit
+        return all_trades
 
     async def get_closed_positions(self, wallet_address: str, **params: Any) -> list[dict]:
         """
-        Return closed (resolved) positions for a wallet address.
+        Return all closed (resolved) positions for a wallet address, paginating via offset.
 
         GET https://data-api.polymarket.com/closed-positions?user=<address>
 
         Equivalent to Kalshi settlements — shows final outcome and realizedPnl
         for each market the user held a position in when it resolved.
 
-        Key params: limit (default 10, max 50), offset, sortBy (REALIZEDPNL etc).
+        Key params: limit (default 50, max 50), offset, sortBy (REALIZEDPNL etc).
         Each position includes: conditionId, outcome, realizedPnl, avgPrice,
                                 totalBought, endDate, title, slug.
         """
-        # TODO: implement pagination (offset-based, max offset 100000)
+        limit = int(params.pop("limit", 50))
+        all_positions: list[dict] = []
+        offset = 0
         async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"{self._data}/closed-positions",
-                params={"user": wallet_address, **params},
-            )
-            resp.raise_for_status()
-            return resp.json()
+            while True:
+                resp = await client.get(
+                    f"{self._data}/closed-positions",
+                    params={"user": wallet_address, "limit": limit, "offset": offset, **params},
+                )
+                resp.raise_for_status()
+                page = resp.json()
+                all_positions.extend(page)
+                if len(page) < limit:
+                    break
+                offset += limit
+        return all_positions
 
     async def get_open_positions(self, wallet_address: str, **params: Any) -> list[dict]:
         """
-        Return current open positions for a wallet address.
+        Return all open positions for a wallet address, paginating via offset.
 
         GET https://data-api.polymarket.com/positions?user=<address>
 
-        Key params: limit (default 100, max 500), offset.
+        Key params: limit (default 500, max 500), offset.
         Each position includes: conditionId, size, avgPrice, currentValue,
                                 cashPnl, outcome, title, slug.
         """
-        # TODO: implement pagination
+        limit = int(params.pop("limit", 500))
+        all_positions: list[dict] = []
+        offset = 0
         async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"{self._data}/positions",
-                params={"user": wallet_address, **params},
-            )
-            resp.raise_for_status()
-            return resp.json()
+            while True:
+                resp = await client.get(
+                    f"{self._data}/positions",
+                    params={"user": wallet_address, "limit": limit, "offset": offset, **params},
+                )
+                resp.raise_for_status()
+                page = resp.json()
+                all_positions.extend(page)
+                if len(page) < limit:
+                    break
+                offset += limit
+        return all_positions
 
     # ------------------------------------------------------------------
     # Gamma API — market metadata (public, no auth)
