@@ -261,15 +261,39 @@ def test_normalise_settlement_yes_result():
     assert s["revenue"] == 380
 
 
+def test_normalise_market_tags_from_tags_array():
+    """Native tags array is used when present."""
+    raw = {**SAMPLE_MARKET, "tags": ["politics", "us-election"]}
+    m = normalise_market(raw)
+    assert m["tags"] == ["politics", "us-election"]
+
+
 def test_normalise_market_tags_from_category():
-    """A market with a category field produces a one-element tags list."""
+    """A market with only a category field produces a one-element tags list."""
     raw = {**SAMPLE_MARKET, "category": "Politics"}
     m = normalise_market(raw)
     assert m["tags"] == ["Politics"]
 
 
-def test_normalise_market_tags_empty_when_no_category():
-    """A market with no category field produces an empty tags list."""
-    raw = {k: v for k, v in SAMPLE_MARKET.items() if k != "category"}
+def test_normalise_market_tags_merges_tags_array_and_category():
+    """When both tags array and category are present, they are merged without duplicates."""
+    raw = {**SAMPLE_MARKET, "tags": ["politics", "us-election"], "category": "sports"}
+    m = normalise_market(raw)
+    assert "politics" in m["tags"]
+    assert "us-election" in m["tags"]
+    assert "sports" in m["tags"]
+    assert len(m["tags"]) == 3
+
+
+def test_normalise_market_tags_no_duplicate_when_category_in_tags():
+    """category is not added again when it already appears in the tags array."""
+    raw = {**SAMPLE_MARKET, "tags": ["Politics", "us-election"], "category": "Politics"}
+    m = normalise_market(raw)
+    assert m["tags"].count("Politics") == 1
+
+
+def test_normalise_market_tags_empty_when_no_category_and_no_tags():
+    """A market with neither tags nor category produces an empty tags list."""
+    raw = {k: v for k, v in SAMPLE_MARKET.items() if k not in ("category", "tags")}
     m = normalise_market(raw)
     assert m["tags"] == []

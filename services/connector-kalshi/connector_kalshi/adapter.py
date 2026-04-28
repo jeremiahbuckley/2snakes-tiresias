@@ -47,7 +47,7 @@ def normalise_market(raw: dict[str, Any]) -> dict[str, Any]:
         ),
         "resolved": raw.get("status") == "finalized",
         "outcome": raw.get("result"),  # "yes" | "no" | None
-        "tags": [raw["category"]] if raw.get("category") else [],
+        "tags": _market_tags(raw),
         "raw": raw,
     }
 
@@ -118,6 +118,21 @@ def normalise_settlement(raw: dict[str, Any], user_id: str) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _market_tags(raw: dict[str, Any]) -> list[str]:
+    """
+    Combine the native tags array with the legacy category field.
+
+    The Kalshi API returns a `tags` list of strings on each market object.
+    The `category` field (a single string) is an older field that overlaps
+    with tags on some markets. We read both and deduplicate.
+    """
+    tags: list[str] = list(raw.get("tags") or [])
+    category = raw.get("category")
+    if category and category not in tags:
+        tags.append(category)
+    return tags
+
 
 def _parse_ts(ts: str | None) -> datetime | None:
     if not ts:
