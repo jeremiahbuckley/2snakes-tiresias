@@ -133,6 +133,28 @@ class KalshiClient:
             resp.raise_for_status()
             return resp.json().get("market", {})
 
+    async def get_event(self, event_ticker: str) -> dict:
+        """Return a single raw event by event_ticker."""
+        path = f"/trade-api/v2/events/{event_ticker}"
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self._base_url}/events/{event_ticker}",
+                headers=self._headers("GET", path),
+            )
+            resp.raise_for_status()
+            return resp.json().get("event", {})
+
+    async def get_series(self, series_ticker: str) -> dict:
+        """Return a single raw series by series_ticker."""
+        path = f"/trade-api/v2/series/{series_ticker}"
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"{self._base_url}/series/{series_ticker}",
+                headers=self._headers("GET", path),
+            )
+            resp.raise_for_status()
+            return resp.json().get("series", {})
+
     async def get_fills(self, **params: Any) -> list[dict]:
         """Return the authenticated user's full fill history, paginating via cursor."""
         path = "/trade-api/v2/portfolio/fills"

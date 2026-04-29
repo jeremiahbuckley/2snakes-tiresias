@@ -131,10 +131,38 @@ async def _sync_kalshi(db: AsyncSession, account: LinkedAccount) -> int:
     tickers = {f["market_external_id"] for f in fills if f.get("market_external_id")}
     market_id_map: dict[str, UUID] = {}  # ticker -> internal Market.id
 
+    # Cache event and series lookups so markets in the same event/series share
+    # a single API call rather than one per fill.
+    event_cache: dict[str, dict] = {}
+    series_cache: dict[str, dict] = {}
+
     for ticker in tickers:
         try:
             raw_market = await client.get_market(ticker)
-            market_norm = normalise_market(raw_market)
+
+            # Tags live on the series, not the market endpoint.
+            # Walk market → event → series, caching each level.
+            series: dict = {}
+            event_ticker = raw_market.get("event_ticker")
+            if event_ticker:
+                if event_ticker not in event_cache:
+                    try:
+                        event_cache[event_ticker] = await client.get_event(event_ticker)
+                    except Exception as exc:
+                        logger.warning("Failed to fetch Kalshi event %s: %s", event_ticker, exc)
+                        event_cache[event_ticker] = {}
+                event = event_cache[event_ticker]
+                series_ticker = event.get("series_ticker")
+                if series_ticker:
+                    if series_ticker not in series_cache:
+                        try:
+                            series_cache[series_ticker] = await client.get_series(series_ticker)
+                        except Exception as exc:
+                            logger.warning("Failed to fetch Kalshi series %s: %s", series_ticker, exc)
+                            series_cache[series_ticker] = {}
+                    series = series_cache.get(series_ticker, {})
+
+            market_norm = normalise_market(raw_market, series=series or None)
             # Enrich with settlement resolution data if available
             if ticker in settlement_by_ticker and not market_norm.get("resolved"):
                 settlement = settlement_by_ticker[ticker]

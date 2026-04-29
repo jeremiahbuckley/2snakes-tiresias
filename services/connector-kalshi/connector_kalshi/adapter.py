@@ -24,7 +24,7 @@ from datetime import datetime
 from typing import Any
 
 
-def normalise_market(raw: dict[str, Any]) -> dict[str, Any]:
+def normalise_market(raw: dict[str, Any], series: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     Map a raw Kalshi market object to the internal Market schema.
 
@@ -34,6 +34,9 @@ def normalise_market(raw: dict[str, Any]) -> dict[str, Any]:
     expiration_time is deprecated; latest_expiration_time is the replacement.
     We read latest_expiration_time first and fall back to expiration_time for
     any cached/legacy responses still using the old field.
+
+    series: optional series object from GET /series/{series_ticker}. The market
+    endpoint does not include category or tags; those live on the series.
     """
     return {
         "external_id": raw.get("ticker"),
@@ -47,7 +50,7 @@ def normalise_market(raw: dict[str, Any]) -> dict[str, Any]:
         ),
         "resolved": raw.get("status") == "finalized",
         "outcome": raw.get("result"),  # "yes" | "no" | None
-        "tags": _market_tags(raw),
+        "tags": _market_tags(raw, series=series),
         "raw": raw,
     }
 
@@ -119,18 +122,26 @@ def normalise_settlement(raw: dict[str, Any], user_id: str) -> dict[str, Any]:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _market_tags(raw: dict[str, Any]) -> list[str]:
+def _market_tags(raw: dict[str, Any], series: dict[str, Any] | None = None) -> list[str]:
     """
-    Combine the native tags array with the legacy category field.
+    Build a deduplicated tags list from market, and optionally series, objects.
 
-    The Kalshi API returns a `tags` list of strings on each market object.
-    The `category` field (a single string) is an older field that overlaps
-    with tags on some markets. We read both and deduplicate.
+    The market endpoint does not include category or tags for most markets —
+    those live on the series (GET /series/{series_ticker}). The market object's
+    own `tags` array and legacy `category` field are still read first in case
+    they are present, then the series category and tags are appended.
     """
     tags: list[str] = list(raw.get("tags") or [])
     category = raw.get("category")
     if category and category not in tags:
         tags.append(category)
+    if series:
+        series_category = series.get("category")
+        if series_category and series_category not in tags:
+            tags.append(series_category)
+        for tag in series.get("tags") or []:
+            if tag and tag not in tags:
+                tags.append(tag)
     return tags
 
 

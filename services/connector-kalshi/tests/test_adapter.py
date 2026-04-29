@@ -297,3 +297,28 @@ def test_normalise_market_tags_empty_when_no_category_and_no_tags():
     raw = {k: v for k, v in SAMPLE_MARKET.items() if k not in ("category", "tags")}
     m = normalise_market(raw)
     assert m["tags"] == []
+
+
+def test_normalise_market_tags_from_series():
+    """Series category and tags are used when the market object has neither."""
+    raw = {k: v for k, v in SAMPLE_MARKET.items() if k not in ("category", "tags")}
+    series = {"category": "Climate and Weather", "tags": ["Daily temperature"]}
+    m = normalise_market(raw, series=series)
+    assert "Climate and Weather" in m["tags"]
+    assert "Daily temperature" in m["tags"]
+
+
+def test_normalise_market_tags_series_deduplicates():
+    """Series category is not added twice if already present in market tags."""
+    raw = {**SAMPLE_MARKET, "tags": ["Climate and Weather"]}
+    series = {"category": "Climate and Weather", "tags": ["Daily temperature"]}
+    m = normalise_market(raw, series=series)
+    assert m["tags"].count("Climate and Weather") == 1
+    assert "Daily temperature" in m["tags"]
+
+
+def test_normalise_market_tags_no_series():
+    """Passing series=None is safe — falls back to market-only tags."""
+    raw = {**SAMPLE_MARKET, "tags": ["politics"]}
+    m = normalise_market(raw, series=None)
+    assert m["tags"] == ["politics"]
