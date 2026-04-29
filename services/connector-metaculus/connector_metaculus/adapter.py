@@ -7,8 +7,9 @@ API data model notes:
 - Resolution is now a string: "yes" | "no" | "annulled" | "ambiguous" | None.
   The old API used integers (1/0/-1); the new API uses strings directly.
 - Market timestamps are ISO-8601 strings (e.g. "2025-01-01T00:00:00Z").
-- Tags/categories live on the Post, not the Question: post["categories"] is a
-  list of {"id": int, "name": str, "slug": str, "description": str}.
+- Tags/categories live at post["projects"]["category"]: a list of
+  {"id": int, "name": str, "slug": str, "emoji": str, "description": str, "type": str}.
+  There is no top-level "categories" or "tags" field on a Post.
 - User forecast data (my_forecasts) comes from the detail endpoint only
   (GET /api/posts/{id}/), as a dict:
     { "history": [...], "latest": {...} | None, "score_data": {} }
@@ -32,7 +33,7 @@ def normalise_market(raw_post: dict[str, Any]) -> dict[str, Any]:
     question_type="unsupported".
     """
     question = raw_post.get("question") or {}
-    categories = raw_post.get("categories") or []
+    categories = (raw_post.get("projects") or {}).get("category") or []
 
     resolution = question.get("resolution")   # str | None
     resolved = raw_post.get("resolved", False)

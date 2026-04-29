@@ -4,7 +4,7 @@ Fixtures model the v2.0 OAS3 API response format:
 - Top-level entity is a Post with an embedded Question.
 - Resolution is a string ("yes"/"no"/"annulled"/"ambiguous") or None.
 - Timestamps are ISO-8601 strings.
-- Tags come from post["categories"][*]["slug"].
+- Tags come from post["projects"]["category"][*]["slug"].
 - User's forecast history is in question["my_forecasts"] (oldest-first list).
 """
 
@@ -24,10 +24,12 @@ SAMPLE_POST_RESOLVED_YES = {
     "resolved": True,
     "nr_forecasters": 412,
     "forecasts_count": 1085,
-    "categories": [
-        {"id": 10, "name": "Geopolitics", "slug": "geopolitics", "description": ""},
-        {"id": 11, "name": "Nuclear", "slug": "nuclear", "description": ""},
-    ],
+    "projects": {
+        "category": [
+            {"id": 10, "name": "Geopolitics", "slug": "geopolitics", "emoji": "🌍", "description": "Geopolitics", "type": "category"},
+            {"id": 11, "name": "Nuclear", "slug": "nuclear", "emoji": "☢️", "description": "Nuclear Technology & Risks", "type": "category"},
+        ]
+    },
     "question": {
         "id": 9876,
         "title": "Will there be a nuclear weapon detonated in conflict before 2030?",
@@ -65,9 +67,11 @@ SAMPLE_POST_OPEN = {
     "resolved": False,
     "nr_forecasters": 890,
     "forecasts_count": 3200,
-    "categories": [
-        {"id": 20, "name": "AI", "slug": "artificial-intelligence", "description": ""},
-    ],
+    "projects": {
+        "category": [
+            {"id": 20, "name": "Artificial Intelligence", "slug": "artificial-intelligence", "emoji": "🤖", "description": "Artificial Intelligence", "type": "category"},
+        ]
+    },
     "question": {
         "id": 44444,
         "title": "Will AGI be achieved before 2030?",
@@ -96,7 +100,7 @@ SAMPLE_POST_NO_FORECASTS = {
     "title": "Will X happen?",
     "status": "open",
     "resolved": False,
-    "categories": [],
+    "projects": {},
     "question": {
         "id": 66666,
         "type": "binary",
@@ -122,7 +126,7 @@ SAMPLE_POST_MY_FORECASTS_AS_DICT = {
     "title": "Will the economy enter a recession in 2026?",
     "status": "open",
     "resolved": False,
-    "categories": [],
+    "projects": {},
     "question": {
         "id": 43265,
         "type": "binary",
@@ -166,7 +170,7 @@ SAMPLE_POST_MY_FORECASTS_AS_EMPTY_DICT = {
     "title": "Another question",
     "status": "open",
     "resolved": False,
-    "categories": [],
+    "projects": {},
     "question": {
         "id": 43266,
         "type": "binary",

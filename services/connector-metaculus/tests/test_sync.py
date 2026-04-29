@@ -35,7 +35,7 @@ BINARY_POST_RESOLVED = {
     "id": 10001,
     "title": "Will a large earthquake hit California before 2027?",
     "resolved": True,
-    "categories": [{"id": 5, "name": "Geophysics", "slug": "geophysics", "description": ""}],
+    "projects": {"category": [{"id": 5, "name": "Geophysics", "slug": "geophysics", "emoji": "🌍", "description": "Geophysics", "type": "category"}]},
     "question": {
         "id": 8001,
         "type": "binary",
@@ -56,7 +56,7 @@ BINARY_POST_OPEN = {
     "id": 10002,
     "title": "Will fusion power be commercially viable before 2035?",
     "resolved": False,
-    "categories": [{"id": 6, "name": "Energy", "slug": "energy", "description": ""}],
+    "projects": {"category": [{"id": 6, "name": "Energy", "slug": "energy", "emoji": "⚡", "description": "Energy", "type": "category"}]},
     "question": {
         "id": 8002,
         "type": "binary",
@@ -76,7 +76,7 @@ NUMERIC_POST = {
     "id": 10003,
     "title": "What will the global average temperature anomaly be in 2030?",
     "resolved": False,
-    "categories": [],
+    "projects": {},
     "question": {
         "id": 8003,
         "type": "numeric",   # NOT binary — should be filtered out in v1
@@ -92,7 +92,7 @@ MULTIPLE_CHOICE_POST = {
     "id": 10004,
     "title": "Which party will win the next UK general election?",
     "resolved": False,
-    "categories": [],
+    "projects": {},
     "question": {
         "id": 8004,
         "type": "multiple_choice",   # NOT binary
@@ -106,7 +106,7 @@ POST_NO_FORECASTS = {
     "id": 10005,
     "title": "Will event X occur?",
     "resolved": False,
-    "categories": [],
+    "projects": {},
     "question": {
         "id": 8005,
         "type": "binary",
@@ -123,7 +123,7 @@ POST_NO_QUESTION = {
     "id": 10006,
     "title": "A group post",
     "resolved": False,
-    "categories": [],
+    "projects": {},
     "question": None,
 }
 
