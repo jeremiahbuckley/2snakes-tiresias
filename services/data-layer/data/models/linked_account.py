@@ -13,11 +13,12 @@ writes by the auth-service; this model stores the ciphertext).
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Optional
 from uuid import UUID
 
-from sqlalchemy import Boolean, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -100,6 +101,14 @@ class LinkedAccount(TimestampMixin, Base):
 
     # True once the auth-service has successfully verified the credential
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Last time data was successfully synced from this platform
+    last_synced_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Error message from most recent failed sync attempt, if any
+    last_sync_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Relationship (lazy to avoid N+1 in list endpoints)
     user: Mapped["User"] = relationship("User", back_populates="linked_accounts", lazy="raise")
