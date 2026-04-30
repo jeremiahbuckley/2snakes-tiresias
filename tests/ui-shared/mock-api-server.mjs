@@ -14,6 +14,7 @@ const routes = {
   'GET /users/:userId/dashboard':  readFileSync(join(__dirname, 'api-mocks/responses/dashboard.json'), 'utf8'),
   'GET /users/:userId/predictions': readFileSync(join(__dirname, 'api-mocks/responses/predictions.json'), 'utf8'),
   'GET /users/:userId/stats':      readFileSync(join(__dirname, 'api-mocks/responses/stats.json'), 'utf8'),
+  'POST /users/:userId/sync':        JSON.stringify({ status: 'syncing' }),
 };
 
 function matchRoute(method, pathname, routes) {

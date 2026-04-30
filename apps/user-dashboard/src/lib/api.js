@@ -110,6 +110,10 @@ export async function getUserStats(userId, token, { tag = '' } = {}) {
   return apiFetch(`/users/${userId}/stats${qs ? '?' + qs : ''}`, { token });
 }
 
+export async function triggerSync(userId, token) {
+  return apiFetch(`/users/${userId}/sync`, { method: 'POST', token });
+}
+
 // ---------------------------------------------------------------------------
 // Linked accounts  —  market sources + social publishing
 // All platforms: kalshi | polymarket | manifold | metaculus | x | bluesky
