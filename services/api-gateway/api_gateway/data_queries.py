@@ -19,6 +19,7 @@ from sqlalchemy.sql.functions import coalesce
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from data.models.linked_account import LinkedAccount, MARKET_PLATFORMS
 from data.models.market import Market
 from data.models.prediction import Prediction
 from data.models.score import UserScore
@@ -107,6 +108,28 @@ async def _user_tags(user_id: UUID, session: AsyncSession) -> list[str]:
         if row:
             tags.update(row)
     return sorted(tags)
+
+
+async def _get_sync_status(user_id: UUID, session: AsyncSession) -> dict:
+    """Return last_synced_at (max across platforms) and per-platform sync_status."""
+    result = await session.execute(
+        select(LinkedAccount).where(
+            LinkedAccount.user_id == user_id,
+            LinkedAccount.platform.in_([p.value for p in MARKET_PLATFORMS]),
+        )
+    )
+    accounts = result.scalars().all()
+    sync_status = [
+        {
+            "platform": a.platform,
+            "last_synced_at": a.last_synced_at.isoformat() if a.last_synced_at else None,
+            "error": a.last_sync_error,
+        }
+        for a in accounts
+    ]
+    timestamps = [a.last_synced_at for a in accounts if a.last_synced_at]
+    last_synced_at = max(timestamps).isoformat() if timestamps else None
+    return {"last_synced_at": last_synced_at, "sync_status": sync_status}
 
 
 def _compute_calibration(resolved_predictions: list) -> list[dict]:
@@ -245,12 +268,15 @@ async def get_dashboard_data(session: AsyncSession, user_id: UUID, tag: Optional
         )
         recent = recent_result.scalars().all()
 
+        sync_info = await _get_sync_status(user_id, session)
         return {
             'user': user_dict,
             'score': _compute_score_from_predictions(all_preds),
             'badges': [],
             'recent_predictions': [_pred_dict(p) for p in recent],
             'available_tags': available_tags,
+            'last_synced_at': sync_info['last_synced_at'],
+            'sync_status': sync_info['sync_status'],
         }
 
     score_result = await session.execute(select(UserScore).where(UserScore.user_id == user_id))
@@ -293,12 +319,15 @@ async def get_dashboard_data(session: AsyncSession, user_id: UUID, tag: Optional
     score_data = _score_dict(score, _compute_per_source(resolved))
     score_data['total_predictions'] = total_pred_count
 
+    sync_info = await _get_sync_status(user_id, session)
     return {
         'user': user_dict,
         'score': score_data,
         'badges': badges,
         'recent_predictions': [_pred_dict(p) for p in recent],
         'available_tags': available_tags,
+        'last_synced_at': sync_info['last_synced_at'],
+        'sync_status': sync_info['sync_status'],
     }
 
 

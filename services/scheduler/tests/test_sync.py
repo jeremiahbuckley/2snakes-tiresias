@@ -6,6 +6,8 @@ from uuid import uuid4
 
 import pytest
 
+from scheduler.sync import sync_one_user
+
 
 def _make_account(platform: str = "kalshi", user_id=None) -> MagicMock:
     acct = MagicMock()
@@ -33,7 +35,6 @@ async def test_sync_one_user_sets_last_synced_at_on_success():
     db = _make_db([account])
 
     with patch("scheduler.sync._sync_kalshi", new=AsyncMock(return_value=3)):
-        from scheduler.sync import sync_one_user
         total = await sync_one_user(db, user_id)
 
     assert account.last_synced_at is not None
@@ -48,7 +49,6 @@ async def test_sync_one_user_sets_last_sync_error_on_failure():
     db = _make_db([account])
 
     with patch("scheduler.sync._sync_manifold", new=AsyncMock(side_effect=RuntimeError("API timeout"))):
-        from scheduler.sync import sync_one_user
         total = await sync_one_user(db, user_id)
 
     assert account.last_synced_at is not None
@@ -66,7 +66,6 @@ async def test_sync_one_user_partial_success():
 
     with patch("scheduler.sync._sync_kalshi", new=AsyncMock(return_value=5)), \
          patch("scheduler.sync._sync_manifold", new=AsyncMock(side_effect=RuntimeError("timeout"))):
-        from scheduler.sync import sync_one_user
         total = await sync_one_user(db, user_id)
 
     assert kalshi_account.last_synced_at is not None

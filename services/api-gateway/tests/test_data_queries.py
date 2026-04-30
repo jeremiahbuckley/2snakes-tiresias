@@ -535,3 +535,65 @@ async def test_db_user_tags_empty_when_no_predictions(session):
     user = await _make_user(session)
     result = await _user_tags(user.id, session)
     assert result == []
+
+
+# ── _get_sync_status ──────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_get_sync_status_returns_last_synced_at_as_max():
+    from unittest.mock import AsyncMock, MagicMock
+    from datetime import datetime, timezone
+    from uuid import uuid4
+    from api_gateway.data_queries import _get_sync_status
+
+    user_id = uuid4()
+
+    account1 = MagicMock()
+    account1.platform = "kalshi"
+    account1.last_synced_at = datetime(2026, 4, 30, 12, 0, 0, tzinfo=timezone.utc)
+    account1.last_sync_error = None
+
+    account2 = MagicMock()
+    account2.platform = "manifold"
+    account2.last_synced_at = datetime(2026, 4, 30, 11, 0, 0, tzinfo=timezone.utc)
+    account2.last_sync_error = "API timeout"
+
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = [account1, account2]
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=mock_result)
+
+    result = await _get_sync_status(user_id, mock_session)
+
+    assert result["last_synced_at"] == "2026-04-30T12:00:00+00:00"
+    assert len(result["sync_status"]) == 2
+
+    kalshi = next(s for s in result["sync_status"] if s["platform"] == "kalshi")
+    assert kalshi["error"] is None
+
+    manifold = next(s for s in result["sync_status"] if s["platform"] == "manifold")
+    assert manifold["error"] == "API timeout"
+
+
+@pytest.mark.asyncio
+async def test_get_sync_status_returns_none_when_no_accounts_synced():
+    from unittest.mock import AsyncMock, MagicMock
+    from uuid import uuid4
+    from api_gateway.data_queries import _get_sync_status
+
+    user_id = uuid4()
+
+    account = MagicMock()
+    account.platform = "kalshi"
+    account.last_synced_at = None
+    account.last_sync_error = None
+
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = [account]
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=mock_result)
+
+    result = await _get_sync_status(user_id, mock_session)
+
+    assert result["last_synced_at"] is None
+    assert result["sync_status"] == [{"platform": "kalshi", "last_synced_at": None, "error": None}]
