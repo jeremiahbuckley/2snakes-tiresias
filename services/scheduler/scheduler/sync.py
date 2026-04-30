@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import select
@@ -81,11 +82,15 @@ async def sync_one_user(db: AsyncSession, user_id: UUID) -> int:
                 "Synced %d predictions from %s for user %s", count, platform, user_id
             )
             total += count
+            account.last_synced_at = datetime.now(timezone.utc)
+            account.last_sync_error = None
 
         except Exception as exc:
             logger.error(
                 "Error syncing %s for user %s: %s", platform, user_id, exc, exc_info=True
             )
+            account.last_synced_at = datetime.now(timezone.utc)
+            account.last_sync_error = str(exc)
 
     return total
 
