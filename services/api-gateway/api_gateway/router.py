@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth_service.api import get_current_user
 from data.database import db_context, get_db
-from data.models.linked_account import LinkedAccount
+from data.models.linked_account import LinkedAccount, MARKET_PLATFORMS
 from data.models.user import User
 
 from api_gateway.data_queries import (
@@ -106,6 +106,7 @@ async def trigger_user_sync(
     recent = await db.execute(
         select(LinkedAccount.last_synced_at).where(
             LinkedAccount.user_id == current_user.id,
+            LinkedAccount.platform.in_([p.value for p in MARKET_PLATFORMS]),
             LinkedAccount.last_synced_at > rate_limit_cutoff,
         ).limit(1)
     )

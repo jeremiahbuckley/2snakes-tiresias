@@ -110,6 +110,10 @@ export async function getUserStats(userId, token, { tag = '' } = {}) {
   return apiFetch(`/users/${userId}/stats${qs ? '?' + qs : ''}`, { token });
 }
 
+/**
+ * Trigger an on-demand background sync for the user's linked accounts.
+ * Returns immediately (202); poll getDashboard to detect completion.
+ */
 export async function triggerSync(userId, token) {
   return apiFetch(`/users/${userId}/sync`, { method: 'POST', token });
 }

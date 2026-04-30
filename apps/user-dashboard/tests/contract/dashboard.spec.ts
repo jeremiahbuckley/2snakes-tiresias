@@ -36,4 +36,18 @@ contractTest.describe('dashboard', () => {
     await expect(page).toHaveURL(/tag=politics/);
     await expect(page.locator('.tag-indicator')).toContainText('politics');
   });
+
+  contractTest('refresh data button is visible in dashboard header', async ({ authedPage: page }) => {
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByRole('button', { name: /refresh data/i })).toBeVisible();
+  });
+
+  contractTest('clicking refresh button shows syncing state', async ({ authedPage: page }) => {
+    await page.goto('/dashboard');
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('button', { name: /refresh data/i }).click();
+    await expect(page.getByRole('button', { name: /syncing/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /syncing/i })).toBeDisabled();
+  });
 });

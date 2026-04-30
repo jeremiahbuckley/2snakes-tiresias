@@ -1,14 +1,80 @@
 <script>
-  import { goto } from '$app/navigation';
+  import { goto, invalidateAll } from '$app/navigation';
+  import { onDestroy } from 'svelte';
   import TagFilter from '$lib/components/TagFilter.svelte';
+  import { triggerSync, getDashboard } from '$lib/api.js';
 
   /** @type {import('./$types').PageData} */
   export let data;
 
-  const { user, score, badges, recentPredictions } = data;
-
+  // Make page data reactive so invalidateAll() refreshes the display.
+  $: user = data.user;
+  $: score = data.score;
+  $: badges = data.badges;
+  $: recentPredictions = data.recentPredictions;
   $: tagFilter = data.tagFilter ?? '';
   $: availableTags = data.availableTags ?? [];
+  $: lastSyncedAt = data.lastSyncedAt;
+
+  $: earnedBadges = badges.filter((b) => b.earned);
+  $: lockedBadges = badges.filter((b) => !b.earned);
+  $: resolutionRate = score.total_predictions
+    ? ((score.resolved_predictions / score.total_predictions) * 100).toFixed(0)
+    : 0;
+  $: noScoringData = score.mean_brier_score == null;
+  $: perSource = Object.entries(score.per_source ?? {});
+
+  // Refresh button state
+  let syncing = false;
+  let syncDisabled = false;
+  let syncErrors = [];
+  let _pollTimer;
+
+  async function onRefresh() {
+    if (syncing || syncDisabled) return;
+    syncing = true;
+    syncDisabled = true;
+    syncErrors = [];
+
+    const baselineSyncedAt = lastSyncedAt;
+
+    // Client-side rate limit: re-enable button after 30s regardless of outcome.
+    setTimeout(() => { syncDisabled = false; }, 30_000);
+
+    try {
+      await triggerSync(user.id, data.token);
+    } catch (_) {
+      syncing = false;
+      return;
+    }
+
+    // Poll every 3s until last_synced_at advances or 90s elapses.
+    const deadline = Date.now() + 90_000;
+    _pollTimer = setInterval(async () => {
+      if (Date.now() > deadline) {
+        clearInterval(_pollTimer);
+        syncing = false;
+        return;
+      }
+      try {
+        const result = await getDashboard(user.id, data.token);
+        if (result.last_synced_at && result.last_synced_at !== baselineSyncedAt) {
+          clearInterval(_pollTimer);
+          syncErrors = (result.sync_status ?? [])
+            .filter((s) => s.error)
+            .map((s) => `${s.platform} returned an error`);
+          await invalidateAll();
+          syncing = false;
+        }
+      } catch (_) {
+        // ignore transient poll errors
+      }
+    }, 3_000);
+  }
+
+  onDestroy(() => {
+    if (_pollTimer) clearInterval(_pollTimer);
+  });
 
   function onTagChange(e) {
     const tag = e.detail;
@@ -31,16 +97,6 @@
     return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
-  const earnedBadges = badges.filter((b) => b.earned);
-  const lockedBadges = badges.filter((b) => !b.earned);
-
-  const resolutionRate = score.total_predictions
-    ? ((score.resolved_predictions / score.total_predictions) * 100).toFixed(0)
-    : 0;
-
-  // True when no market has resolved yet — scores are null
-  const noScoringData = score.mean_brier_score == null;
-
   const platformColors = {
     kalshi: '#00b894',
     polymarket: '#6c5ce7',
@@ -51,8 +107,6 @@
   function sourceColor(source) {
     return platformColors[source] ?? '#aaa';
   }
-
-  const perSource = Object.entries(score.per_source ?? {});
 </script>
 
 <svelte:head>
@@ -64,15 +118,37 @@
     <h1>Dashboard</h1>
     <p class="welcome">Welcome back, {user.display_name ?? user.username}</p>
   </div>
-  {#if score.last_scored_at}
-    <div class="last-scored">Last scored: {fmtDate(score.last_scored_at)}</div>
-  {/if}
+  <div class="header-right">
+    {#if score.last_scored_at}
+      <div class="last-scored">Last scored: {fmtDate(score.last_scored_at)}</div>
+    {/if}
+    <button
+      class="refresh-btn"
+      class:syncing
+      disabled={syncing || syncDisabled}
+      on:click={onRefresh}
+    >
+      {#if syncing}
+        <span class="spinner" aria-hidden="true"></span>
+        Syncing…
+      {:else}
+        Refresh data
+      {/if}
+    </button>
+  </div>
 </div>
 
 <div class="page-controls">
   <TagFilter availableTags={availableTags} selectedTag={tagFilter} on:change={onTagChange} />
   {#if tagFilter}<span class="tag-indicator">Showing: {tagFilter}</span>{/if}
 </div>
+
+{#if syncErrors.length > 0}
+  <div class="sync-warning" role="alert">
+    <strong>Sync complete</strong> — {syncErrors.join('; ')}
+    <button class="dismiss-btn" on:click={() => syncErrors = []} aria-label="Dismiss">×</button>
+  </div>
+{/if}
 
 <!-- Score Summary Cards -->
 <section class="cards">
@@ -243,6 +319,76 @@
     font-size: 13px;
     color: #9ca3af;
     padding-top: 6px;
+  }
+
+  .header-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  .refresh-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #4f8ef7;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .refresh-btn:hover:not(:disabled) {
+    background: #3b7de8;
+  }
+
+  .refresh-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .sync-warning {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 14px;
+    color: #92400e;
+    margin-bottom: 16px;
+  }
+
+  .dismiss-btn {
+    margin-left: auto;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    color: #92400e;
+    line-height: 1;
+    padding: 0 2px;
   }
 
   /* ---- Pending notice ---- */
