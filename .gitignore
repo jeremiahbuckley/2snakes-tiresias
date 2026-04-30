@@ -39,3 +39,4 @@ data/postgres/
 
 # Git worktrees
 .worktrees/
+.superpowers/
