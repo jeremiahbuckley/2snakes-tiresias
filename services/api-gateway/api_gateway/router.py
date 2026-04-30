@@ -7,13 +7,17 @@ a dedicated data microservice.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone, timedelta
 from typing import Annotated, Optional
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth_service.api import get_current_user
-from data.database import get_db
+from data.database import db_context, get_db
+from data.models.linked_account import LinkedAccount
 from data.models.user import User
 
 from api_gateway.data_queries import (
@@ -21,6 +25,12 @@ from api_gateway.data_queries import (
     get_predictions as _get_predictions,
     get_stats_data,
 )
+
+async def _background_sync(user_id: UUID) -> None:
+    from scheduler.sync import sync_one_user
+    async with db_context() as db:
+        await sync_one_user(db, user_id)
+
 
 router = APIRouter()
 
@@ -80,3 +90,27 @@ async def get_leaderboard(limit: int = 100, offset: int = 0) -> dict:
 @router.get("/markets")
 async def list_markets(source: Optional[str] = None, resolved: Optional[bool] = None) -> dict:
     return {"markets": [], "status": "stub"}
+
+
+@router.post("/users/{user_id}/sync", status_code=202)
+async def trigger_user_sync(
+    user_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: CurrentUser,
+    db: DB,
+) -> dict:
+    if user_id != str(current_user.id):
+        raise HTTPException(status_code=403)
+
+    rate_limit_cutoff = datetime.now(timezone.utc) - timedelta(seconds=60)
+    recent = await db.execute(
+        select(LinkedAccount.last_synced_at).where(
+            LinkedAccount.user_id == current_user.id,
+            LinkedAccount.last_synced_at > rate_limit_cutoff,
+        ).limit(1)
+    )
+    if recent.scalar_one_or_none() is not None:
+        raise HTTPException(status_code=429, detail="Sync triggered too recently, please wait")
+
+    background_tasks.add_task(_background_sync, current_user.id)
+    return {"status": "syncing"}
